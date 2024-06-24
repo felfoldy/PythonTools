@@ -5,18 +5,19 @@ import PackageDescription
 
 let package = Package(
     name: "PythonTools",
-    platforms: [.macOS(.v10_15), .iOS(.v13), .tvOS(.v13), .watchOS(.v6), .macCatalyst(.v13)],
+    platforms: [.macOS(.v14), .iOS(.v17), .visionOS(.v1)],
     products: [
-        // Products define the executables and libraries a package produces, making them visible to other packages.
-        .library(
-            name: "PythonTools",
-            targets: ["PythonTools"]),
+        .library(name: "PythonTools",
+                 targets: ["PythonTools"]),
+    ],
+    dependencies: [
+        .package(url: "https://github.com/wabiverse/MetaversePythonFramework.git", from: "3.11.7"),
     ],
     targets: [
-        // Targets are the basic building blocks of a package, defining a module or a test suite.
-        // Targets can depend on other targets in this package and products from dependencies.
-        .target(
-            name: "PythonTools"),
+        .target(name: "PythonTools",
+                dependencies: [
+                    .product(name: "Python", package: "MetaversePythonFramework")
+                ]),
         .testTarget(
             name: "PythonToolsTests",
             dependencies: ["PythonTools"]
