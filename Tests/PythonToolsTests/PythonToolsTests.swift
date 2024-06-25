@@ -2,17 +2,17 @@ import Testing
 @testable import PythonTools
 
 @Test func runScript_resultsInSuccess() async throws {
-    let interpreter = await Interpreter()
+    try await Interpreter.setup()
 
     await #expect(throws: Never.self) {
-        try await interpreter.run(script: "2 + 2")
+        try await Interpreter.run("print(2 + 2)")
     }
 }
 
 @Test func runScript_nonZeroErrors() async throws {
-    let interpreter = await Interpreter()
+    try await Interpreter.setup()
 
     await #expect(throws: Interpreter.Error.self) {
-        try await interpreter.run(script: "2 +")
+        try await Interpreter.run("2 +")
     }
 }

@@ -8,20 +8,36 @@
 import Foundation
 import PyBundle
 import Python
+import PythonKit
 
 public final class Interpreter {
-    let queue = DispatchQueue.global(qos: .userInteractive)
+    private static let shared = Interpreter()
+    private static var isInitialized = false
+
+    private let queue = DispatchQueue.global(qos: .userInteractive)
     
-    init() async {
-        await withCheckedContinuation { continuation in
-            queue.async {
-                PyBundler.shared.pyInfo()
-                continuation.resume()
+    public static func setup() async throws {
+        try await shared.execute {
+            // TODO: Setup console output
+            let sys = Python.import("sys")
+            
+            // (str) -> None
+            sys.stdout.write = PythonFunction { params in
+                print(String(params[0])!, terminator: "")
+                return Python.None
             }
+            .pythonObject
+            
+            // (str) -> None
+            sys.stderr.write = PythonFunction { params in
+                print(String(params[0])!, terminator: "")
+                return Python.None
+            }
+            .pythonObject
         }
     }
-    
-    func run(script: String) async throws {
+
+    public func run(_ script: String) async throws {
         try await execute {
             let result = PyRun_SimpleString(script)
             
@@ -31,9 +47,27 @@ public final class Interpreter {
         }
     }
     
-    private func execute(block: @escaping () throws -> Void) async throws {
+    public static func run(_ script: String) async throws {
+        try await shared.run(script)
+    }
+    
+    public static func execute(block: @escaping () throws -> Void) async throws {
+        try await shared.execute(block: block)
+    }
+}
+
+private extension Interpreter {
+    func execute(block: @escaping () throws -> Void) async throws {
         try await withCheckedThrowingContinuation { continuation in
             queue.async {
+                if !Interpreter.isInitialized {
+                    _ = PyBundler.shared
+                    let sys = Python.import("sys")
+                    print("Initialized Python v\(sys.version_info.major).\(sys.version_info.minor)")
+                    Interpreter.isInitialized = true
+                }
+                
+                // TODO: Add OSSignpost logging.
                 do {
                     try block()
                     continuation.resume()
