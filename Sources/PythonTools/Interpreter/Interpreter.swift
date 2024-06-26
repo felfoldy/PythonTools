@@ -16,7 +16,7 @@ public final class Interpreter: PythonInterpreter {
     private let queue = DispatchQueue.global(qos: .userInteractive)
     
     public static func run(_ script: String) async throws {
-        try await shared.eval(script)
+        try await shared.run(script)
     }
     
     public static func execute(block: @escaping () throws -> Void) async throws {
