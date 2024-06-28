@@ -25,5 +25,9 @@ final class DefaultOutputStream: OutputStream {
         outputBuffer = []
         errorBuffer = []
     }
+
+    func evaluation(result: String) {
+        print("Result: \(result)")
+    }
 }
 

@@ -8,8 +8,13 @@
 public protocol OutputStream: AnyObject {
     var outputBuffer: [String] { get set }
     var errorBuffer: [String] { get set }
-    
+
     func finalize()
+
+    /// Called when an expression is evaluated to handle the result.
+    ///
+    /// - Parameter result: The result of the evaluated expression.
+    func evaluation(result: String)
 }
 
 extension OutputStream {

@@ -21,12 +21,12 @@ public protocol PythonInterpreter {
 
 extension PythonInterpreter {
     public func compile(code: String) throws -> UnsafeMutablePointer<PyObject> {
-        var compiledCode = Py_CompileString(code, "<string>", Py_eval_input)
-        
+        var compiledCode = Py_CompileString(code, "<stdin>", Py_eval_input)
+
         // If failed to compile as evaluation compile as file input.
         if compiledCode == nil {
             PyErr_Clear()
-            compiledCode = Py_CompileString(code, "<string>", Py_file_input)
+            compiledCode = Py_CompileString(code, "<stdin>", Py_file_input)
         }
         
         if let compiledCode {
@@ -60,8 +60,7 @@ extension PythonInterpreter {
         }
 
         if let resultCStr = PyUnicode_AsUTF8(resultStr) {
-            // TODO: Log result.
-            print("Result: " + String(cString: resultCStr))
+            outputStream.evaluation(result: String(cString: resultCStr))
         }
         
         Py_DecRef(resultStr)
@@ -80,24 +79,25 @@ extension PythonInterpreter {
     }
 }
 
-public enum InterpreterError: LocalizedError {
-    case unknown
-    case nonZero(Int32)
+public enum InterpreterError: LocalizedError, Equatable {
+    case unexpected(Error)
     case compilationFailure(String)
     case executionFailure(String)
 
     public var errorDescription: String? {
         switch self {
-        case let .nonZero(code):
-            "Python script terminated with non-zero exit code: \(code)"
         case let .compilationFailure(message):
             "Failed to compile:\n\(message)"
             
         case let .executionFailure(message):
-            "Execution failure:\n\(message)"
+            message
 
-        case .unknown:
-            ""
+        case let .unexpected(error):
+            "Unexpected error: \(error.localizedDescription)"
         }
+    }
+
+    public static func == (lhs: InterpreterError, rhs: InterpreterError) -> Bool {
+        lhs.errorDescription == rhs.errorDescription
     }
 }
