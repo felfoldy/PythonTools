@@ -29,7 +29,7 @@ struct OutputStreamingTests {
     }
 
     @Test("Check evaluation result")
-    func testEvaluation() async throws {
+    func evaluation() async throws {
         try await Interpreter.run("2 + 2")
         
         #expect(outputStream.lastEvaluationResult == "4")
@@ -40,7 +40,7 @@ struct OutputStreamingTests {
         "print(",
         "if True",
     ])
-    func testErrorMessage_compilationError(code: String) async throws {
+    func errorMessage_compilationError(code: String) async throws {
         await #expect {
             try await Interpreter.run(code)
         } throws: { error in
@@ -60,7 +60,7 @@ struct OutputStreamingTests {
         "'hello' + 10",
         "my_list = [1, 2, 3]; my_list[10]",
     ])
-    func testErrorMessage_executionError(code: String) async throws {
+    func errorMessage_executionError(code: String) async throws {
         await #expect {
             try await Interpreter.run(code)
         } throws: { error in
