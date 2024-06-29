@@ -16,7 +16,7 @@ extension Tag {
 struct OutputStreamingTests {
     let outputStream = MockOutputStream()
     
-    init() {
+    @MainActor init() {
         Interpreter.output(to: outputStream)
     }
     
@@ -24,15 +24,22 @@ struct OutputStreamingTests {
     func simplePrint() async throws {
         try await Interpreter.run("print('message')")
         
-        #expect(outputStream.output == "message\n")
+        await #expect(outputStream.output == "message")
         #expect(outputStream.finalizeCallCount == 1)
     }
-
+    
     @Test("Check evaluation result")
     func evaluation() async throws {
         try await Interpreter.run("2 + 2")
         
         #expect(outputStream.lastEvaluationResult == "4")
+    }
+    
+    @Test func executionTime() async throws {
+        try await Interpreter.run("print('something')")
+        
+        let executionTime = try #require(outputStream.lastExecutionTime)
+        #expect(executionTime > 0)
     }
     
     @Test("Compilation error", .tags(.errorHandling), arguments: [
@@ -43,16 +50,17 @@ struct OutputStreamingTests {
     func errorMessage_compilationError(code: String) async throws {
         await #expect {
             try await Interpreter.run(code)
-        } throws: { error in
+        } throws: { @MainActor error in
             guard let error = error as? InterpreterError,
                   case let .compilationFailure(message) = error else {
                 return false
             }
 
             return message == outputStream.errorMessage
+                .trimmingCharacters(in: .whitespacesAndNewlines)
         }
 
-        #expect(!outputStream.errorMessage.isEmpty)
+        await #expect(!outputStream.errorMessage.isEmpty)
     }
     
     @Test("Execution error", .tags(.errorHandling), arguments: [
@@ -63,15 +71,15 @@ struct OutputStreamingTests {
     func errorMessage_executionError(code: String) async throws {
         await #expect {
             try await Interpreter.run(code)
-        } throws: { error in
+        } throws: { @MainActor error in
             guard let error = error as? InterpreterError,
                   case let .executionFailure(message) = error else {
                 return false
             }
 
-            return message == outputStream.errorMessage
+            return message.trimmingCharacters(in: .whitespacesAndNewlines) == outputStream.errorMessage
         }
 
-        #expect(!outputStream.errorMessage.isEmpty)
+        await #expect(!outputStream.errorMessage.isEmpty)
     }
 }

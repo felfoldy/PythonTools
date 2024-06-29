@@ -29,5 +29,7 @@ final class DefaultOutputStream: OutputStream {
     func evaluation(result: String) {
         print("Result: \(result)")
     }
+    
+    func execution(time: UInt64) {}
 }
 

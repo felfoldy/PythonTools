@@ -11,15 +11,15 @@ class MockOutputStream: OutputStream {
     var outputBuffer: [String] = []
     var errorBuffer: [String] = []
     
-    var output: String {
-        outputBuffer.joined()
+    var lastExecutionTime: UInt64?
+    func execution(time: UInt64) {
+        lastExecutionTime = time
     }
     
     var finalizeCallCount = 0
     func finalize() {
         finalizeCallCount += 1
     }
-    
 
     var lastEvaluationResult: String?
     func evaluation(result: String) {

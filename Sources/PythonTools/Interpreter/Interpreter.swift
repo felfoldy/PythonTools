@@ -12,6 +12,7 @@ import PythonKit
 public final class Interpreter: PythonInterpreter {
     static let shared = Interpreter()
     
+    @MainActor
     public var outputStream: OutputStream = DefaultOutputStream()
 
     private var isInitialized = false
@@ -25,6 +26,7 @@ public final class Interpreter: PythonInterpreter {
         try await shared.execute(block: block)
     }
     
+    @MainActor
     public static func output(to outputStream: OutputStream) {
         shared.outputStream = outputStream
     }
@@ -42,10 +44,17 @@ extension Interpreter {
                 do {
                     try block()
                     
-                    Interpreter.shared.outputStream.finalize()
+                    DispatchQueue.main.async {
+                        Interpreter.shared.outputStream.finalize()
+                    }
+                    
                     continuation.resume()
                 } catch {
-                    Interpreter.shared.outputStream.finalize()
+
+                    DispatchQueue.main.async {
+                        Interpreter.shared.outputStream.finalize()
+                    }
+
                     continuation.resume(throwing: error)
                 }
             }
@@ -58,11 +67,15 @@ extension Interpreter {
 
         // Inject output stream
         sys.stdout.write = .inject { (str: String) in
-            Interpreter.shared.outputStream.receive(output: str)
+            DispatchQueue.main.async {
+                Interpreter.shared.outputStream.receive(output: str)
+            }
         }
 
         sys.stderr.write = .inject { (str: String) in
-            Interpreter.shared.outputStream.receive(error: str)
+            DispatchQueue.main.async {
+                Interpreter.shared.outputStream.receive(error: str)
+            }
         }
         
         let major = sys.version_info.major

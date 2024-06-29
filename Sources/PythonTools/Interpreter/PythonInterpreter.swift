@@ -35,20 +35,37 @@ extension PythonInterpreter {
         
         PyErr_Print()
 
-        throw InterpreterError.compilationFailure(outputStream.errorMessage)
+        try DispatchQueue.main.sync {
+            throw InterpreterError.compilationFailure(outputStream.errorMessage)
+        }
+        fatalError()
     }
     
     func execute(compiledCode: UnsafeMutablePointer<PyObject>) throws {
+        let startTime = DispatchTime.now()
+        
         let mainModule = PyImport_AddModule("__main__")
         let globals = PyModule_GetDict(mainModule)
         let result = PyEval_EvalCode(compiledCode, globals, globals)
         
+        let endTime = DispatchTime.now()
+        
+        let executionTime = endTime.uptimeNanoseconds - startTime.uptimeNanoseconds
+        
+        DispatchQueue.main.sync {
+            outputStream.execution(time: executionTime)
+        }
+        
         // Log result.
         guard let result else {
             PyErr_Print()
-
-            throw InterpreterError
-                .executionFailure(outputStream.errorMessage)
+            
+            try DispatchQueue.main.sync {
+                throw InterpreterError
+                    .executionFailure(outputStream.errorMessage)
+            }
+            
+            return
         }
 
         defer { Py_DecRef(result) }
@@ -60,7 +77,9 @@ extension PythonInterpreter {
         }
 
         if let resultCStr = PyUnicode_AsUTF8(resultStr) {
-            outputStream.evaluation(result: String(cString: resultCStr))
+            DispatchQueue.main.sync {
+                outputStream.evaluation(result: String(cString: resultCStr))
+            }
         }
         
         Py_DecRef(resultStr)
