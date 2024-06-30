@@ -8,6 +8,7 @@
 import Foundation
 import PyBundle
 import PythonKit
+import Python
 
 public final class Interpreter: PythonInterpreter {
     static let shared = Interpreter()
@@ -30,6 +31,16 @@ public final class Interpreter: PythonInterpreter {
     public static func output(to outputStream: OutputStream) {
         shared.outputStream = outputStream
     }
+    
+    public static func load(bundle: Bundle) async throws {
+        bundle.load()
+        
+        guard let path = bundle.path(forResource: "PythonLibs", ofType: nil)else {
+            throw InterpreterError.failedToLoadBundle
+        }
+        
+        try await run("sys.path.append('\(path)')")
+    }
 }
 
 extension Interpreter {
@@ -44,14 +55,13 @@ extension Interpreter {
                 do {
                     try block()
                     
-                    DispatchQueue.main.async {
+                    DispatchQueue.main.sync {
                         Interpreter.shared.outputStream.finalize()
                     }
                     
                     continuation.resume()
                 } catch {
-
-                    DispatchQueue.main.async {
+                    DispatchQueue.main.sync {
                         Interpreter.shared.outputStream.finalize()
                     }
 

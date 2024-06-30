@@ -99,12 +99,17 @@ extension PythonInterpreter {
 }
 
 public enum InterpreterError: LocalizedError, Equatable {
+    case failedToLoadBundle
+    
     case unexpected(Error)
     case compilationFailure(String)
     case executionFailure(String)
 
     public var errorDescription: String? {
         switch self {
+        case .failedToLoadBundle:
+            "Couldn't load bundle"
+            
         case let .compilationFailure(message):
             "Failed to compile:\n\(message)"
             
