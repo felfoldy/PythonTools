@@ -30,11 +30,11 @@
       shouldUseLaunchSchemeArgsEnv = "YES">
       <TestPlans>
          <TestPlanReference
-            reference = "container:../PythonTools.xctestplan"
-            default = "YES">
+            reference = "container:../PythonTools.xctestplan">
          </TestPlanReference>
          <TestPlanReference
-            reference = "container:../TestPlan.xctestplan">
+            reference = "container:../TestPlan.xctestplan"
+            default = "YES">
          </TestPlanReference>
       </TestPlans>
       <Testables>

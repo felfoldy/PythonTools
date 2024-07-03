@@ -19,13 +19,13 @@ let package = Package(
                     .product(name: "Python", package: "MetaversePythonFramework")
                 ],
                 resources: [
-                    .copy("Resources/PythonLibs")
+                    .copy("Resources/site-packages")
                 ]),
         .testTarget(
             name: "PythonToolsTests",
             dependencies: ["PythonTools"],
             resources: [
-                .copy("Resources/PythonLibs")
+                .copy("Resources/site-packages")
             ]
         ),
     ]

@@ -46,7 +46,7 @@ public final class Interpreter: PythonInterpreter {
 
         bundle.load()
         
-        guard let path = bundle.path(forResource: "PythonLibs", ofType: nil)else {
+        guard let path = bundle.path(forResource: "site-packages", ofType: nil)else {
             throw InterpreterError.failedToLoadBundle
         }
         
