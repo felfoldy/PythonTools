@@ -31,5 +31,7 @@ final class DefaultOutputStream: OutputStream {
     }
     
     func execution(time: UInt64) {}
+    
+    func clear() {}
 }
 

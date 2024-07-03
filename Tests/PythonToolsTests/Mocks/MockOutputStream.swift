@@ -25,4 +25,9 @@ class MockOutputStream: OutputStream {
     func evaluation(result: String) {
         lastEvaluationResult = result
     }
+    
+    var clearCallCount = 0
+    func clear() {
+        clearCallCount += 1
+    }
 }

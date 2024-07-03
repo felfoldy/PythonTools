@@ -82,4 +82,10 @@ struct OutputStreamingTests {
 
         await #expect(!outputStream.errorMessage.isEmpty)
     }
+    
+    @Test func clear() async throws {
+        try await Interpreter.run("clear()")
+        
+        #expect(outputStream.clearCallCount == 1)
+    }
 }

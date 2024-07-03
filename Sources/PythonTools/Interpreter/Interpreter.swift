@@ -62,9 +62,10 @@ public final class Interpreter: PythonInterpreter {
         
         var compeltionsResult = [String]()
         try await shared.execute {
-            let code_completions = Python.import("interpreter")
-            let results = code_completions.completions(code)
+            let interpreter = Python.import("interpreter")
+            let results = interpreter._completions(code)
                 .compactMap(String.init)
+
             compeltionsResult = results
         }
         return compeltionsResult
@@ -114,6 +115,14 @@ extension Interpreter {
                 Interpreter.shared.outputStream.receive(error: str)
             }
         }
+        
+        sys.clear = .inject {
+            DispatchQueue.main.async {
+                Interpreter.shared.outputStream.clear()
+            }
+        }
+        
+        PyRun_SimpleString("from sys import clear")
         
         let major = sys.version_info.major
         let minor = sys.version_info.minor

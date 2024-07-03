@@ -21,6 +21,9 @@ public protocol OutputStream: AnyObject {
     
     @MainActor
     func finalize()
+    
+    @MainActor
+    func clear()
 }
 
 extension OutputStream {
