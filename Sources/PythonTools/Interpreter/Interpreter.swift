@@ -17,7 +17,11 @@ public final class Interpreter: PythonInterpreter {
     public var outputStream: OutputStream = DefaultOutputStream()
 
     private var isInitialized = false
-    private let queue = DispatchQueue.global(qos: .userInteractive)
+    
+    @MainActor
+    private var loadedModules = Set<String>()
+    private let queue = DispatchQueue(label: "PythonQueue",
+                                      qos: .userInteractive)
 
     public static func run(_ script: String) async throws {
         try await shared.run(script)
@@ -33,6 +37,13 @@ public final class Interpreter: PythonInterpreter {
     }
     
     public static func load(bundle: Bundle) async throws {
+        guard let identifier = bundle.bundleIdentifier,
+              await !shared.loadedModules.contains(identifier) else {
+            return
+        }
+
+        log.info("load \(identifier)")
+
         bundle.load()
         
         guard let path = bundle.path(forResource: "PythonLibs", ofType: nil)else {
@@ -40,6 +51,23 @@ public final class Interpreter: PythonInterpreter {
         }
         
         try await run("sys.path.append('\(path)')")
+        
+        await MainActor.run {
+            _ = shared.loadedModules.insert(identifier)
+        }
+    }
+    
+    public static func completions(code: String) async throws -> [String] {
+        try await load(bundle: .module)
+        
+        var compeltionsResult = [String]()
+        try await shared.execute {
+            let code_completions = Python.import("interpreter")
+            let results = code_completions.completions(code)
+                .compactMap(String.init)
+            compeltionsResult = results
+        }
+        return compeltionsResult
     }
 }
 
@@ -51,7 +79,6 @@ extension Interpreter {
                     Interpreter.shared.initializePythonEnvironment()
                 }
 
-                // TODO: Add OSSignpost logging.
                 do {
                     try block()
                     
@@ -90,7 +117,7 @@ extension Interpreter {
         
         let major = sys.version_info.major
         let minor = sys.version_info.minor
-        print("Initialized Python v\(major).\(minor)")
+        Interpreter.log.info("Initialized Python v\(major).\(minor)")
 
         isInitialized = true
     }
