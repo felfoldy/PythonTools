@@ -44,7 +44,7 @@ public struct BytCodeCompiler: Compiler {
     public func compile(code: CompilableCode) async throws -> CompiledByteCode {
         var byteCode: UnsafeMutablePointer<PyObject>?
 
-        try await Interpreter.execute {
+        try await Interpreter.perform {
             PyErr_Clear()
             
             byteCode = Py_CompileString(code.source,

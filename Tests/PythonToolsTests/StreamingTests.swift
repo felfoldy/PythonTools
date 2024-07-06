@@ -25,7 +25,18 @@ struct OutputStreamingTests {
         try await Interpreter.run("print('message')")
         
         await #expect(outputStream.output == "message")
-        #expect(outputStream.finalizeCallCount == 2)
+        #expect(outputStream.finalizeCallCount == 1)
+    }
+    
+    @Test("Code ID")
+    func finalizedCodeID() async throws {
+        let compilableCode = CompilableCode(source: "print('message')")
+        let compiledCode = try await Interpreter.compile(code: compilableCode)
+        try await Interpreter.execute(compiledCode: compiledCode)
+        
+        let codeId = try #require(outputStream.lastCodeId)
+        
+        #expect(codeId == compilableCode.id)
     }
     
     @Test("Check evaluation result")
@@ -76,7 +87,7 @@ struct OutputStreamingTests {
                   case let .executionFailure(message) = error else {
                 return false
             }
-
+            
             return message.trimmingCharacters(in: .whitespacesAndNewlines) == outputStream.errorMessage
         }
 

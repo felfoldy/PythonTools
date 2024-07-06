@@ -10,7 +10,7 @@ import PyBundle
 import PythonKit
 import Python
 
-public final class Interpreter: PythonInterpreter {
+public final class Interpreter {
     static let shared = Interpreter()
     
     @MainActor
@@ -28,11 +28,15 @@ public final class Interpreter: PythonInterpreter {
         .outputError()
 
     public static func run(_ script: String) async throws {
-        try await shared.run(script)
+        let compilableCode = CompilableCode(source: script)
+
+        let compiledCode = try await Interpreter.compile(code: compilableCode)
+
+        try await Interpreter.execute(compiledCode: compiledCode)
     }
     
-    public static func execute(block: @escaping () throws -> Void) async throws {
-        try await shared.execute(block: block)
+    public static func perform(block: @escaping () throws -> Void) async throws {
+        try await shared.perform(block: block)
     }
     
     @MainActor
@@ -65,7 +69,7 @@ public final class Interpreter: PythonInterpreter {
         try await load(bundle: .module)
         
         var compeltionsResult = [String]()
-        try await shared.execute {
+        try await shared.perform {
             let interpreter = Python.import("interpreter")
             let results = interpreter._completions(code)
                 .compactMap(String.init)
@@ -77,7 +81,7 @@ public final class Interpreter: PythonInterpreter {
 }
 
 extension Interpreter {
-    public func execute(block: @escaping () throws -> Void) async throws {
+    public func perform(block: @escaping () throws -> Void) async throws {
         try await withCheckedThrowingContinuation { continuation in
             queue.async {
                 if !Interpreter.shared.isInitialized {
@@ -87,16 +91,8 @@ extension Interpreter {
                 do {
                     try block()
                     
-                    DispatchQueue.main.sync {
-                        Interpreter.shared.outputStream.finalize()
-                    }
-                    
                     continuation.resume()
                 } catch {
-                    DispatchQueue.main.sync {
-                        Interpreter.shared.outputStream.finalize()
-                    }
-
                     continuation.resume(throwing: error)
                 }
             }
@@ -109,24 +105,24 @@ extension Interpreter {
 
         // Inject output stream
         sys.stdout.write = .inject { (str: String) in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 Interpreter.shared.outputStream.receive(output: str)
             }
         }
 
         sys.stderr.write = .inject { (str: String) in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 Interpreter.shared.outputStream.receive(error: str)
             }
         }
         
-        sys.clear = .inject {
-            DispatchQueue.main.async {
+        let main = Python.import("__main__")
+        
+        main.clear = .inject {
+            Task { @MainActor in
                 Interpreter.shared.outputStream.clear()
             }
         }
-        
-        PyRun_SimpleString("from sys import clear")
         
         let major = sys.version_info.major
         let minor = sys.version_info.minor

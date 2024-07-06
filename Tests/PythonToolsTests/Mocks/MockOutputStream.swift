@@ -6,19 +6,19 @@
 //
 
 import PythonTools
+import Foundation
 
-class MockOutputStream: OutputStream {
+class MockOutputStream: PythonTools.OutputStream {
     var outputBuffer: [String] = []
     var errorBuffer: [String] = []
     
-    var lastExecutionTime: UInt64?
-    func execution(time: UInt64) {
-        lastExecutionTime = time
-    }
-    
     var finalizeCallCount = 0
-    func finalize() {
+    var lastExecutionTime: UInt64?
+    var lastCodeId: UUID?
+    func finalize(codeId: UUID, executionTime: UInt64) {
+        lastCodeId = codeId
         finalizeCallCount += 1
+        lastExecutionTime = executionTime
     }
 
     var lastEvaluationResult: String?

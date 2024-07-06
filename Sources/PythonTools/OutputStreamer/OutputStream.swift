@@ -5,23 +5,24 @@
 //  Created by Tibor Felföldy on 2024-06-26.
 //
 
+import Foundation
+
 public protocol OutputStream: AnyObject {
     var outputBuffer: [String] { get set }
     var errorBuffer: [String] { get set }
 
-    /// Execution time.
-    /// - Parameter time: time in nanoseconds.
+    /// Signals the end of the code execution to finalize the buffers.
+    /// - Parameters:
+    ///   - id: ID of the CompilableCode.
+    ///   - executionTime: Time in nanoseconds.
     @MainActor
-    func execution(time: UInt64)
-    
-    /// Called when an expression is evaluated to handle the result.
+    func finalize(codeId: UUID, executionTime: UInt64)
+
+    /// Called after an expression is evaluated to handle the result.
     /// - Parameter result: The result of the evaluated expression.
     @MainActor
     func evaluation(result: String)
-    
-    @MainActor
-    func finalize()
-    
+
     @MainActor
     func clear()
 }
