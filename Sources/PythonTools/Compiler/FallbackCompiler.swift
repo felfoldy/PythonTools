@@ -17,7 +17,7 @@ private struct FallbackCompiler: Compiler {
     }
 }
 
-extension Compiler {
+public extension Compiler {
     func fallback(to other: Compiler) -> Compiler {
         FallbackCompiler(base: self, other: other)
     }
