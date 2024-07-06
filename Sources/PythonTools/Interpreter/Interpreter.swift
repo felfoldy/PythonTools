@@ -22,6 +22,10 @@ public final class Interpreter: PythonInterpreter {
     private var loadedModules = Set<String>()
     private let queue = DispatchQueue(label: "PythonQueue",
                                       qos: .userInteractive)
+    
+    let defaultCompiler: Compiler = .evaluationCompiler
+        .fallback(to: .fileCompiler)
+        .outputError()
 
     public static func run(_ script: String) async throws {
         try await shared.run(script)

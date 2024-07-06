@@ -9,9 +9,6 @@ import Python
 import PythonKit
 import Foundation
 
-let globals = PyDict_New()
-let locals = PyDict_New()
-
 public protocol PythonInterpreter {
     var outputStream: OutputStream { get }
     func execute(block: @escaping () throws -> Void) async throws
@@ -20,27 +17,6 @@ public protocol PythonInterpreter {
 // MARK: Compilation + execution
 
 extension PythonInterpreter {
-    public func compile(code: String) throws -> UnsafeMutablePointer<PyObject> {
-        var compiledCode = Py_CompileString(code, "<stdin>", Py_eval_input)
-
-        // If failed to compile as evaluation compile as file input.
-        if compiledCode == nil {
-            PyErr_Clear()
-            compiledCode = Py_CompileString(code, "<stdin>", Py_file_input)
-        }
-        
-        if let compiledCode {
-            return compiledCode
-        }
-        
-        PyErr_Print()
-
-        try DispatchQueue.main.sync {
-            throw InterpreterError.compilationFailure(outputStream.errorMessage)
-        }
-        fatalError()
-    }
-    
     func execute(compiledCode: UnsafeMutablePointer<PyObject>) throws {
         let startTime = DispatchTime.now()
         
@@ -86,14 +62,12 @@ extension PythonInterpreter {
     }
 
     public func run(_ code: String) async throws {
-        try await execute {
-            PyErr_Clear()
+        let compilableCode = CompilableCode(source: code)
 
-            let compiledCode = try compile(code: code)
-            
-            try execute(compiledCode: compiledCode)
-            
-            Py_DecRef(compiledCode)
+        let compiledCode = try await Interpreter.compile(code: compilableCode)
+
+        try await execute {
+            try execute(compiledCode: compiledCode.byteCode)
         }
     }
 }

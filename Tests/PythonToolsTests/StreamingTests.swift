@@ -25,7 +25,7 @@ struct OutputStreamingTests {
         try await Interpreter.run("print('message')")
         
         await #expect(outputStream.output == "message")
-        #expect(outputStream.finalizeCallCount == 1)
+        #expect(outputStream.finalizeCallCount == 2)
     }
     
     @Test("Check evaluation result")

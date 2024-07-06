@@ -19,3 +19,7 @@ import Foundation
     
     #expect(results == ["print("])
 }
+
+@Test func compilation() async throws {
+    
+}
