@@ -61,7 +61,7 @@ struct ByteCodeExecuter {
     }
 }
 
-extension Interpreter {
+public extension Interpreter {
     static func execute(compiledCode: CompiledByteCode) async throws {
         let executer = ByteCodeExecuter()
         try await executer.execute(code: compiledCode)
