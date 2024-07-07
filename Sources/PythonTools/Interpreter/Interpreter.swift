@@ -22,6 +22,11 @@ public final class Interpreter {
     private var loadedModules = Set<String>()
     private let queue = DispatchQueue(label: "PythonQueue",
                                       qos: .userInteractive)
+    private let queueKey = DispatchSpecificKey<Void>()
+    
+    init() {
+        queue.setSpecific(key: queueKey, value: ())
+    }
     
     let defaultCompiler: Compiler = .evaluationCompiler
         .fallback(to: .fileCompiler)
@@ -58,7 +63,10 @@ public final class Interpreter {
             throw InterpreterError.failedToLoadBundle
         }
         
-        try await run("sys.path.append('\(path)')")
+        try await perform {
+            let sys = Python.import("sys")
+            sys.path.append(path)
+        }
         
         await MainActor.run {
             _ = shared.loadedModules.insert(identifier)
@@ -95,6 +103,16 @@ extension Interpreter {
                 } catch {
                     continuation.resume(throwing: error)
                 }
+            }
+        }
+    }
+    
+    public func syncQueue(block: () -> Void) {
+        if queue.getSpecific(key: queueKey) != nil {
+            block()
+        } else {
+            queue.sync {
+                block()
             }
         }
     }

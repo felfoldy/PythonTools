@@ -50,6 +50,10 @@ public struct BytCodeCompiler: Compiler {
             byteCode = Py_CompileString(code.source,
                                         code.filename,
                                         type.rawValue)
+            
+            if byteCode != nil {
+                Py_IncRef(byteCode)
+            }
         }
         
         if let byteCode {

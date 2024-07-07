@@ -14,7 +14,9 @@ struct OutputErrorCompiler: Compiler {
         do {
             return try await base.compile(code: code)
         } catch {
-            PyErr_Print()
+            try await Interpreter.perform {
+                PyErr_Print()
+            }
 
             let errorMessage = await Interpreter.shared.outputStream.errorMessage
 

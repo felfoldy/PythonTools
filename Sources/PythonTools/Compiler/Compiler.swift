@@ -34,7 +34,9 @@ public final class CompiledByteCode: Identifiable {
     }
     
     deinit {
-        Py_DecRef(byteCode)
+        Interpreter.shared.syncQueue {
+            Py_DecRef(byteCode)
+        }
     }
 }
 
