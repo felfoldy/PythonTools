@@ -10,14 +10,30 @@ import Foundation
 import Python
 
 public struct PythonBinding {
-    public weak var object: AnyObject?
+    let className: String
+    weak var object: AnyObject?
 
     public init<Object: AnyObject>(_ object: Object) {
         self.object = object
+        className = PythonBinding.className(object.self)
+    }
+    
+    public func pythonObject() async throws -> PythonObject {
+        let address = await address
+        
+        var result: PythonObject!
+        
+        try await Interpreter.perform {
+            let main = Python.import("__main__")
+            result = main[dynamicMember: className](address)
+        }
+        
+        return result
     }
     
     // MARK: Memory address.
     
+    @MainActor
     public var address: Int {
         guard let object else { return 0 }
         let reference = Unmanaged.passUnretained(object).toOpaque()
@@ -26,15 +42,28 @@ public struct PythonBinding {
         return address
     }
     
+    @MainActor
     public static func from<Object: AnyObject>(address: Int) throws -> Object {
-        guard let result = registry[address]?.object as? Object else {
+        guard let object = registry[address]?.object else {
             registry[address] = nil
+            throw PythonBindingError.instanceDeallocated
+        }
+        
+        guard let result = object as? Object else {
             throw PythonBindingError.instanceDeallocated
         }
         return result
     }
-    
-    // MARK: Register class.
+}
+
+// MARK: Register class.
+
+extension PythonBinding {
+    @MainActor
+    static var registry = [Int : PythonBinding]()
+
+    @MainActor
+    static var registeredClasses = Set<String>()
     
     public static func className<Object>(_ object: Object) -> String {
         let type = (object as? Any.Type) ?? type(of: object)
@@ -42,25 +71,107 @@ public struct PythonBinding {
             .replacingOccurrences(of: ".", with: "_")
     }
     
-    public static func register<Object: AnyObject>(_ object: Object.Type) async throws {
+    public static func register<Object: AnyObject>(
+        _ object: Object.Type,
+        members: [PropertyRegistration<Object>]
+    ) async throws {
         let name = className(object)
         if await registeredClasses.contains(name) { return }
         
-        try await Interpreter.run("""
-        class \(name):
-            def __init__(self, address: int):
-                self._address = address
-        """)
+        // Register the Python class.
+        try await Interpreter.run(
+            """
+            class \(name):
+                def __init__(self, address: int):
+                    self._address = address
+            """
+        )
+        
+        // Set members.
+        try await Interpreter.perform {
+            let main = Python.import("__main__")
+
+            let classDef = main[dynamicMember: name]
+
+            let property = Python.import("builtins").property
+            
+            for member in members {
+                classDef[dynamicMember: member.name] = property(
+                    member.getter,
+                    member.setter ?? Python.None,
+                    Python.None,
+                    Python.None
+                )
+            }
+        }
         
         await MainActor.run {
             Interpreter.log.info("Registered binding: \(name)")
             _ = registeredClasses.insert(name)
         }
     }
+}
+
+public struct PropertyRegistration<Root: AnyObject> {
+    enum PropertyType {
+        case int
+    }
+
+    let name: String
+    let path: PartialKeyPath<Root>
+    let type: PropertyType
+
+    var getter: PythonObject {
+        PythonFunction { pythonObject in
+            let addressObj = pythonObject._address
+            
+            let obj: Root? = DispatchQueue.main.sync {
+                guard let address = Int(addressObj) else {
+                    return nil
+                }
+                return try? PythonBinding.from(address: address)
+            }
+            
+            guard let obj else { return Python.None }
+
+            return (obj[keyPath: path] as? PythonConvertible) ?? Python.None
+        }
+        .pythonObject
+    }
     
-    static var registry = [Int : PythonBinding]()
-    @MainActor
-    static var registeredClasses = Set<String>()
+    var setter: PythonObject? {
+        switch type {
+        case .int: makeSetter(Int.self)
+        }
+    }
+    
+    func makeSetter<Value: ConvertibleFromPython>(_ type: Value.Type) -> PythonObject? {
+        guard let writablePath = path as? WritableKeyPath<Root, Value> else {
+            return nil
+        }
+        
+        return PythonFunction { pythonObjects in
+            let addressObj = pythonObjects[0]._address
+            guard let address = Int(addressObj),
+                  let value = Value(pythonObjects[1]) else {
+                return Python.None
+            }
+
+            DispatchQueue.main.sync {
+                var obj: Root? = try? PythonBinding.from(address: address)
+                obj?[keyPath: writablePath] = value
+            }
+
+            return Python.None
+        }
+        .pythonObject
+    }
+}
+
+public extension PropertyRegistration {
+    static func int(_ name: String, _ path: KeyPath<Root, Int>) -> PropertyRegistration {
+        PropertyRegistration(name: name, path: path, type: .int)
+    }
 }
 
 public enum PythonBindingError: Error {
