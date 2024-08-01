@@ -118,7 +118,9 @@ extension PythonBinding {
 
 public struct PropertyRegistration<Root: AnyObject> {
     enum PropertyType {
-        case int, string
+        case int, uint
+        case string, bool
+        case float
     }
 
     let name: String
@@ -146,7 +148,10 @@ public struct PropertyRegistration<Root: AnyObject> {
     var setter: PythonObject? {
         switch type {
         case .int: makeSetter(Int.self)
+        case .uint: makeSetter(UInt.self)
         case .string: makeSetter(String.self)
+        case .bool: makeSetter(Bool.self)
+        case .float: makeSetter(Double.self)
         }
     }
     
@@ -178,8 +183,26 @@ public extension PropertyRegistration {
         PropertyRegistration(name: name, path: path, type: .int)
     }
     
+    static func int(_ name: String, _ path: KeyPath<Root, UInt>) -> PropertyRegistration {
+        PropertyRegistration(name: name, path: path, type: .uint)
+    }
+
     static func string(_ name: String, _ path: KeyPath<Root, String>) -> PropertyRegistration {
         PropertyRegistration(name: name, path: path, type: .string)
+    }
+
+    static func bool(_ name: String, _ path: KeyPath<Root, Bool>) -> PropertyRegistration {
+        PropertyRegistration(name: name, path: path, type: .bool)
+    }
+    
+    // In python float is a double.
+    static func float(_ name: String, _ path: KeyPath<Root, Double>) -> PropertyRegistration {
+        PropertyRegistration(name: name, path: path, type: .float)
+    }
+    
+    // Float will be casted to Double.
+    static func float(_ name: String, _ path: KeyPath<Root, Float>) -> PropertyRegistration {
+        PropertyRegistration(name: name, path: path, type: .float)
     }
 }
 

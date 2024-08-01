@@ -13,6 +13,7 @@ class TestClass {
     let readOnlyValue: Int = 42
     var value: Int = 4
     var stringValue: String = ""
+    var floatValue: Float = 3.2
 }
 
 enum TestNS { class TestClass {} }
@@ -68,7 +69,8 @@ struct PythonBindingTests {
                 members: [
                     .int("value", \.value),
                     .int("read_only_value", \.readOnlyValue),
-                    .string("string_value", \.stringValue)
+                    .string("string_value", \.stringValue),
+                    .float("float_value", \.floatValue)
                 ]
             )
 
@@ -105,11 +107,17 @@ struct PythonBindingTests {
             let pythonObject = try await binding.pythonObject()
             
             testObject.stringValue = "none"
-            
-            #expect(pythonObject.checking.string_value == "none")
+            #expect(pythonObject.string_value == "none")
             
             pythonObject.string_value = "new value"
             #expect(testObject.stringValue == "new value")
+        }
+        
+        @Test func floatRegistration() async throws {
+            let pythonObject = try await binding.pythonObject()
+            
+            testObject.floatValue = 0.1
+            #expect(Float(pythonObject.float_value) == 0.1)
         }
     }
 
