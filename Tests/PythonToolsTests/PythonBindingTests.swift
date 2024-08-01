@@ -14,6 +14,8 @@ class TestClass {
     var value: Int = 4
     var stringValue: String = ""
     var floatValue: Float = 3.2
+    
+    var optionalValue: Int? = 12
 }
 
 enum TestNS { class TestClass {} }
@@ -67,10 +69,10 @@ struct PythonBindingTests {
             try await PythonBinding.register(
                 TestClass.self,
                 members: [
-                    .int("value", \.value),
-                    .int("read_only_value", \.readOnlyValue),
-                    .string("string_value", \.stringValue),
-                    .float("float_value", \.floatValue)
+                    .set("value", \.value),
+                    .set("string_value", \.stringValue),
+                    .set("float_value", \.floatValue),
+                    .set("optional_value", \.optionalValue),
                 ]
             )
 
@@ -94,7 +96,7 @@ struct PythonBindingTests {
         }
         
         @Test func intRegistration() async throws {
-            let pythonObject = try await binding.pythonObject()
+            let pythonObject = try await binding.createPythonObject()
             
             testObject.value = 42
             #expect(pythonObject.value == 42)
@@ -104,7 +106,7 @@ struct PythonBindingTests {
         }
         
         @Test func stringRegistration() async throws {
-            let pythonObject = try await binding.pythonObject()
+            let pythonObject = try await binding.createPythonObject()
             
             testObject.stringValue = "none"
             #expect(pythonObject.string_value == "none")
@@ -114,17 +116,31 @@ struct PythonBindingTests {
         }
         
         @Test func floatRegistration() async throws {
-            let pythonObject = try await binding.pythonObject()
+            let pythonObject = try await binding.createPythonObject()
             
             testObject.floatValue = 0.1
             #expect(Float(pythonObject.float_value) == 0.1)
+        }
+        
+        @Test func optionalRegistration() async throws {
+            let pythonObject = try await binding.createPythonObject()
+            
+            testObject.optionalValue = 32
+            
+            try await Interpreter.perform {
+                #expect(pythonObject.optional_value == 32)
+                
+                pythonObject.optional_value = Python.None
+            }
+            
+            #expect(testObject.optionalValue == nil)
         }
     }
 
     @Test func registerInModule() async throws {
         try await PythonBinding.register(
             TestClass.self, name: "TestClass", in: "builtins",
-            members: [.int("value", \.value)]
+            members: [.set("value", \.value)]
         )
 
         let testObject = TestClass()

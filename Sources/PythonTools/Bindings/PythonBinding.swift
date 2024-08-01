@@ -18,7 +18,7 @@ public struct PythonBinding {
         className = PythonBinding.className(object.self)
     }
     
-    public func pythonObject() async throws -> PythonObject {
+    public func createPythonObject() async throws -> PythonObject {
         let address = await address
         
         var result: PythonObject!
@@ -71,7 +71,7 @@ extension PythonBinding {
             .replacingOccurrences(of: ".", with: "_")
     }
     
-    public static func register<Object: AnyObject>(
+    public static func register<Object>(
         _ object: Object.Type,
         name: String? = nil, in moduleName: String? = nil,
         members: [PropertyRegistration<Object>]
@@ -97,8 +97,8 @@ extension PythonBinding {
 
             for member in members {
                 classDef[dynamicMember: member.name] = property(
-                    member.getter,
-                    member.setter ?? Python.None,
+                    member.getterFunction,
+                    member.setterFunction,
                     Python.None,
                     Python.None
                 )
@@ -117,17 +117,13 @@ extension PythonBinding {
 }
 
 public struct PropertyRegistration<Root: AnyObject> {
-    enum PropertyType {
-        case int, uint
-        case string, bool
-        case float
-    }
-
+    public typealias Registerable = (PythonConvertible & ConvertibleFromPython)
+    
     let name: String
-    let path: PartialKeyPath<Root>
-    let type: PropertyType
+    let getter: (Root) -> PythonConvertible
+    let setter: ((inout Root, PythonObject) -> Void)?
 
-    var getter: PythonObject {
+    var getterFunction: PythonObject {
         PythonFunction { pythonObject in
             let addressObj = pythonObject._address
             
@@ -140,69 +136,66 @@ public struct PropertyRegistration<Root: AnyObject> {
             
             guard let obj else { return Python.None }
 
-            return (obj[keyPath: path] as? PythonConvertible) ?? Python.None
+            return getter(obj)
         }
         .pythonObject
     }
-    
-    var setter: PythonObject? {
-        switch type {
-        case .int: makeSetter(Int.self)
-        case .uint: makeSetter(UInt.self)
-        case .string: makeSetter(String.self)
-        case .bool: makeSetter(Bool.self)
-        case .float: makeSetter(Double.self)
-        }
-    }
-    
-    func makeSetter<Value: ConvertibleFromPython>(_ type: Value.Type) -> PythonObject? {
-        guard let writablePath = path as? WritableKeyPath<Root, Value> else {
-            return nil
-        }
+
+    var setterFunction: PythonObject {
+        guard let setter else { return Python.None }
         
         return PythonFunction { pythonObjects in
             let addressObj = pythonObjects[0]._address
-            guard let address = Int(addressObj),
-                  let value = Value(pythonObjects[1]) else {
+            let pythonValue = pythonObjects[1]
+            guard let address = Int(addressObj) else {
                 return Python.None
             }
 
             DispatchQueue.main.sync {
-                var obj: Root? = try? PythonBinding.from(address: address)
-                obj?[keyPath: writablePath] = value
+                if var obj: Root? = try? PythonBinding.from(address: address) {
+                    setter(&obj!, pythonValue)
+                }
             }
 
             return Python.None
-        }
-        .pythonObject
+        }.pythonObject
+    }
+
+    public static func bind<Value>(
+        name: String,
+        get getter: @escaping (Root) -> Value,
+        set setter: ((inout Root, Value) -> Void)? = nil
+    ) -> PropertyRegistration where Value: Registerable {
+        let anySetter: ((inout Root, PythonObject) -> Void)? = if let setter {
+            { root, pythonValue in
+                if let value = Value(pythonValue) {
+                    setter(&root, value)
+                }
+            }
+        } else { nil }
+
+        return PropertyRegistration<Root>(
+            name: name,
+            getter: getter,
+            setter: anySetter
+        )
     }
 }
 
 public extension PropertyRegistration {
-    static func int(_ name: String, _ path: KeyPath<Root, Int>) -> PropertyRegistration {
-        PropertyRegistration(name: name, path: path, type: .int)
+    static func setterFromKeyPath<Value>(_ path: KeyPath<Root, Value>) -> ((inout Root, Value) -> Void)? {
+        if let writablePath = path as? WritableKeyPath<Root, Value> {
+            return { root, value in
+                root[keyPath: writablePath] = value
+            }
+        }
+        return nil
     }
     
-    static func int(_ name: String, _ path: KeyPath<Root, UInt>) -> PropertyRegistration {
-        PropertyRegistration(name: name, path: path, type: .uint)
-    }
-
-    static func string(_ name: String, _ path: KeyPath<Root, String>) -> PropertyRegistration {
-        PropertyRegistration(name: name, path: path, type: .string)
-    }
-
-    static func bool(_ name: String, _ path: KeyPath<Root, Bool>) -> PropertyRegistration {
-        PropertyRegistration(name: name, path: path, type: .bool)
-    }
-    
-    // In python float is a double.
-    static func float(_ name: String, _ path: KeyPath<Root, Double>) -> PropertyRegistration {
-        PropertyRegistration(name: name, path: path, type: .float)
-    }
-    
-    // Float will be casted to Double.
-    static func float(_ name: String, _ path: KeyPath<Root, Float>) -> PropertyRegistration {
-        PropertyRegistration(name: name, path: path, type: .float)
+    static func set<Value>(_ name: String, _ path: KeyPath<Root, Value>) -> PropertyRegistration where Value: Registerable {
+        .bind(name: name,
+              get: { $0[keyPath: path] },
+              set: setterFromKeyPath(path))
     }
 }
 
