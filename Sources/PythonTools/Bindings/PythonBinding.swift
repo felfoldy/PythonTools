@@ -9,6 +9,16 @@ import PythonKit
 import Foundation
 import Python
 
+public protocol PythonBindable: AnyObject {
+    static func register() async throws
+}
+
+public extension PythonBindable {
+    func createPythonObject() async throws -> PythonObject {
+        try await PythonBinding(self).createPythonObject()
+    }
+}
+
 public struct PythonBinding {
     let className: String
     weak var object: AnyObject?
@@ -23,9 +33,13 @@ public struct PythonBinding {
         
         var result: PythonObject!
         
+        guard let classInfo = await PythonBinding.registeredClasses[className] else {
+            throw PythonBindingError.unregisteredType
+        }
+        
         try await Interpreter.perform {
-            let main = Python.import("__main__")
-            result = main[dynamicMember: className](address)
+            let main = Python.import(classInfo.module)
+            result = main[dynamicMember: classInfo.name](address)
         }
         
         return result
@@ -58,12 +72,17 @@ public struct PythonBinding {
 
 // MARK: Register class.
 
+struct PythonClassInfo {
+    let name: String
+    let module: String
+}
+
 extension PythonBinding {
     @MainActor
     static var registry = [Int : PythonBinding]()
 
     @MainActor
-    static var registeredClasses = Set<String>()
+    static var registeredClasses = [String : PythonClassInfo]()
     
     public static func className<Object>(_ object: Object) -> String {
         let type = (object as? Any.Type) ?? type(of: object)
@@ -110,6 +129,13 @@ extension PythonBinding {
                 module[dynamicMember: name ?? objectName] = classDef
                 main[dynamicMember: objectName] = Python.None
             }
+        }
+        
+        await MainActor.run {
+            registeredClasses[objectName] = PythonClassInfo(
+                name: name ?? objectName,
+                module: moduleName ?? "__main__"
+            )
         }
 
         Interpreter.log.info("Registered binding: \(objectName)")
@@ -200,5 +226,6 @@ public extension PropertyRegistration {
 }
 
 public enum PythonBindingError: Error {
+    case unregisteredType
     case instanceDeallocated
 }

@@ -10,12 +10,24 @@ import PythonKit
 import PythonTools
 
 class TestClass {
-    let readOnlyValue: Int = 42
     var value: Int = 4
     var stringValue: String = ""
     var floatValue: Float = 3.2
-    
     var optionalValue: Int? = 12
+}
+
+extension TestClass: PythonBindable {
+    static func register() async throws {
+        try await PythonBinding.register(
+            TestClass.self,
+            members: [
+                .set("value", \.value),
+                .set("string_value", \.stringValue),
+                .set("float_value", \.floatValue),
+                .set("optional_value", \.optionalValue),
+            ]
+        )
+    }
 }
 
 enum TestNS { class TestClass {} }
@@ -150,6 +162,10 @@ struct PythonBindingTests {
             let builtins = Python.import("builtins")
             let pythonObject = builtins.TestClass(address)
             #expect(Int(pythonObject.value) == testObject.value)
+        }
+        
+        await #expect(throws: Never.self) {
+            try await PythonBinding(testObject).createPythonObject()
         }
     }
 }
