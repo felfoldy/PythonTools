@@ -12,6 +12,7 @@ import PythonTools
 class TestClass {
     let readOnlyValue: Int = 42
     var value: Int = 4
+    var stringValue: String = ""
 }
 
 enum TestNS { class TestClass {} }
@@ -66,7 +67,8 @@ struct PythonBindingTests {
                 TestClass.self,
                 members: [
                     .int("value", \.value),
-                    .int("read_only_value", \.readOnlyValue)
+                    .int("read_only_value", \.readOnlyValue),
+                    .string("string_value", \.stringValue)
                 ]
             )
 
@@ -89,24 +91,7 @@ struct PythonBindingTests {
             }
         }
         
-        @Test func pythonObject() async throws {
-            let address = await binding.address
-
-            let pythonObject = try await binding.pythonObject()
-
-            try await Interpreter.perform {
-                #expect(Int(pythonObject._address) == address)
-            }
-        }
-        
         @Test func intRegistration() async throws {
-            try await PythonBinding.register(
-                TestClass.self,
-                members: [.int("value", \.value)]
-            )
-            
-            let binding = PythonBinding(testObject)
-            
             let pythonObject = try await binding.pythonObject()
             
             testObject.value = 42
@@ -114,6 +99,33 @@ struct PythonBindingTests {
             
             pythonObject.value = 22
             #expect(testObject.value == 22)
+        }
+        
+        @Test func stringRegistration() async throws {
+            let pythonObject = try await binding.pythonObject()
+            
+            testObject.stringValue = "none"
+            
+            #expect(pythonObject.checking.string_value == "none")
+            
+            pythonObject.string_value = "new value"
+            #expect(testObject.stringValue == "new value")
+        }
+    }
+
+    @Test func registerInModule() async throws {
+        try await PythonBinding.register(
+            TestClass.self, name: "TestClass", in: "builtins",
+            members: [.int("value", \.value)]
+        )
+
+        let testObject = TestClass()
+        let address = await PythonBinding(testObject).address
+        
+        try await Interpreter.perform {
+            let builtins = Python.import("builtins")
+            let pythonObject = builtins.TestClass(address)
+            #expect(Int(pythonObject.value) == testObject.value)
         }
     }
 }

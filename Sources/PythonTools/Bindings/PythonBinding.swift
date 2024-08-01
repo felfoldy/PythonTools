@@ -73,15 +73,15 @@ extension PythonBinding {
     
     public static func register<Object: AnyObject>(
         _ object: Object.Type,
+        name: String? = nil, in moduleName: String? = nil,
         members: [PropertyRegistration<Object>]
     ) async throws {
-        let name = className(object)
-        if await registeredClasses.contains(name) { return }
+        let objectName = className(object)
         
         // Register the Python class.
         try await Interpreter.run(
             """
-            class \(name):
+            class \(objectName):
                 def __init__(self, address: int):
                     self._address = address
             """
@@ -91,10 +91,10 @@ extension PythonBinding {
         try await Interpreter.perform {
             let main = Python.import("__main__")
 
-            let classDef = main[dynamicMember: name]
+            let classDef = main[dynamicMember: objectName]
 
             let property = Python.import("builtins").property
-            
+
             for member in members {
                 classDef[dynamicMember: member.name] = property(
                     member.getter,
@@ -103,18 +103,22 @@ extension PythonBinding {
                     Python.None
                 )
             }
+
+            // Move to module.
+            if let moduleName {
+                let module = Python.import(moduleName)
+                module[dynamicMember: name ?? objectName] = classDef
+                main[dynamicMember: objectName] = Python.None
+            }
         }
-        
-        await MainActor.run {
-            Interpreter.log.info("Registered binding: \(name)")
-            _ = registeredClasses.insert(name)
-        }
+
+        Interpreter.log.info("Registered binding: \(objectName)")
     }
 }
 
 public struct PropertyRegistration<Root: AnyObject> {
     enum PropertyType {
-        case int
+        case int, string
     }
 
     let name: String
@@ -142,6 +146,7 @@ public struct PropertyRegistration<Root: AnyObject> {
     var setter: PythonObject? {
         switch type {
         case .int: makeSetter(Int.self)
+        case .string: makeSetter(String.self)
         }
     }
     
@@ -171,6 +176,10 @@ public struct PropertyRegistration<Root: AnyObject> {
 public extension PropertyRegistration {
     static func int(_ name: String, _ path: KeyPath<Root, Int>) -> PropertyRegistration {
         PropertyRegistration(name: name, path: path, type: .int)
+    }
+    
+    static func string(_ name: String, _ path: KeyPath<Root, String>) -> PropertyRegistration {
+        PropertyRegistration(name: name, path: path, type: .string)
     }
 }
 
