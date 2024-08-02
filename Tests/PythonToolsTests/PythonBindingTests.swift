@@ -9,11 +9,27 @@ import Testing
 import PythonKit
 import PythonTools
 
+class InnerTestClass {
+    var value = "hidden"
+}
+
 class TestClass {
     var value: Int = 4
     var stringValue: String = ""
     var floatValue: Float = 3.2
     var optionalValue: Int? = 12
+    
+    var innerObject = InnerTestClass()
+    var optionalObject: InnerTestClass? = InnerTestClass()
+}
+
+extension InnerTestClass: PythonBindable {
+    static func register() async throws {
+        try await PythonBinding.register(
+            InnerTestClass.self,
+            members: [.set(\.value)]
+        )
+    }
 }
 
 extension TestClass: PythonBindable {
@@ -21,10 +37,12 @@ extension TestClass: PythonBindable {
         try await PythonBinding.register(
             TestClass.self,
             members: [
-                .set("value", \.value),
-                .set("string_value", \.stringValue),
-                .set("float_value", \.floatValue),
-                .set("optional_value", \.optionalValue),
+                .set(\.value),
+                .set(\.stringValue),
+                .set(\.floatValue),
+                .set(\.optionalValue),
+                .set(\.innerObject),
+                .set(\.optionalObject),
             ]
         )
     }
@@ -78,16 +96,7 @@ struct PythonBindingTests {
         let binding: PythonBinding
         
         init() async throws {
-            try await PythonBinding.register(
-                TestClass.self,
-                members: [
-                    .set("value", \.value),
-                    .set("string_value", \.stringValue),
-                    .set("float_value", \.floatValue),
-                    .set("optional_value", \.optionalValue),
-                ]
-            )
-
+            try await TestClass.register()
             testObject = TestClass()
             binding = PythonBinding(testObject)
         }
@@ -108,44 +117,50 @@ struct PythonBindingTests {
         }
         
         @Test func intRegistration() async throws {
-            let pythonObject = try await binding.createPythonObject()
-            
-            testObject.value = 42
-            #expect(pythonObject.value == 42)
-            
-            pythonObject.value = 22
-            #expect(testObject.value == 22)
+            try await Interpreter.perform {
+                let pythonObject = binding.pythonObject
+                
+                testObject.value = 42
+                #expect(pythonObject.value == 42)
+                
+                pythonObject.value = 22
+                #expect(testObject.value == 22)
+            }
         }
         
         @Test func stringRegistration() async throws {
-            let pythonObject = try await binding.createPythonObject()
-            
-            testObject.stringValue = "none"
-            #expect(pythonObject.string_value == "none")
-            
-            pythonObject.string_value = "new value"
-            #expect(testObject.stringValue == "new value")
+            try await Interpreter.perform {
+                let pythonObject = binding.pythonObject
+                
+                testObject.stringValue = "none"
+                #expect(pythonObject.string_value == "none")
+                
+                pythonObject.string_value = "new value"
+                #expect(testObject.stringValue == "new value")
+            }
         }
         
         @Test func floatRegistration() async throws {
-            let pythonObject = try await binding.createPythonObject()
-            
-            testObject.floatValue = 0.1
-            #expect(Float(pythonObject.float_value) == 0.1)
+            try await Interpreter.perform {
+                let pythonObject = binding.pythonObject
+                
+                testObject.floatValue = 0.1
+                #expect(Float(pythonObject.float_value) == 0.1)
+            }
         }
         
         @Test func optionalRegistration() async throws {
-            let pythonObject = try await binding.createPythonObject()
-            
-            testObject.optionalValue = 32
-            
             try await Interpreter.perform {
-                #expect(pythonObject.optional_value == 32)
+                let pythonObject = binding.pythonObject
                 
+                testObject.optionalValue = 32
+                
+                #expect(pythonObject.optional_value == 32)
+                    
                 pythonObject.optional_value = Python.None
+                
+                #expect(testObject.optionalValue == nil)
             }
-            
-            #expect(testObject.optionalValue == nil)
         }
     }
 
@@ -163,9 +178,46 @@ struct PythonBindingTests {
             let pythonObject = builtins.TestClass(address)
             #expect(Int(pythonObject.value) == testObject.value)
         }
+    }
+    
+    @Test func reference() async throws {
+        try await InnerTestClass.register()
+        try await TestClass.register()
         
-        await #expect(throws: Never.self) {
-            try await PythonBinding(testObject).createPythonObject()
+        let testObject = TestClass()
+        
+        try await Interpreter.perform {
+            let pythonObject = testObject.pythonObject
+            
+            #expect(pythonObject.inner_object.value == "hidden")
+        }
+        
+        let newInnerObject = InnerTestClass()
+        newInnerObject.value = "revealed"
+        
+        try await Interpreter.perform {
+            let pythonObject = testObject.pythonObject
+            
+            pythonObject.inner_object = newInnerObject.pythonObject
+            
+            #expect(pythonObject.inner_object.value == "revealed")
+        }
+    }
+    
+    @Test
+    func optionalReference() async throws {
+        try await InnerTestClass.register()
+        try await TestClass.register()
+        
+        let testObject = TestClass()
+        
+        try await Interpreter.perform {
+            let pythonObject = testObject.pythonObject
+            
+            #expect(pythonObject.optional_object.value == "hidden")
+            
+            testObject.optionalObject = nil
+            #expect(pythonObject.optional_object == Python.None)
         }
     }
 }

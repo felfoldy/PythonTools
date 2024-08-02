@@ -9,13 +9,24 @@ import PythonKit
 import Foundation
 import Python
 
-public protocol PythonBindable: AnyObject {
+public protocol PythonBindable: AnyObject, PythonConvertible {
     static func register() async throws
 }
 
 public extension PythonBindable {
-    func createPythonObject() async throws -> PythonObject {
-        try await PythonBinding(self).createPythonObject()
+    var pythonObject: PythonObject {
+        PythonBinding(self).pythonObject
+    }
+}
+
+private extension PythonBindable {
+    @MainActor
+    static func from(_ pythonObject: PythonObject) -> Self? {
+        guard let address = Int(pythonObject._address) else {
+            return nil
+        }
+        
+        return try? PythonBinding.from(address: address)
     }
 }
 
@@ -26,23 +37,6 @@ public struct PythonBinding {
     public init<Object: AnyObject>(_ object: Object) {
         self.object = object
         className = PythonBinding.className(object.self)
-    }
-    
-    public func createPythonObject() async throws -> PythonObject {
-        let address = await address
-        
-        var result: PythonObject!
-        
-        guard let classInfo = await PythonBinding.registeredClasses[className] else {
-            throw PythonBindingError.unregisteredType
-        }
-        
-        try await Interpreter.perform {
-            let main = Python.import(classInfo.module)
-            result = main[dynamicMember: classInfo.name](address)
-        }
-        
-        return result
     }
     
     // MARK: Memory address.
@@ -67,6 +61,27 @@ public struct PythonBinding {
             throw PythonBindingError.instanceDeallocated
         }
         return result
+    }
+}
+
+extension PythonBinding: PythonConvertible, ConvertibleFromPython {
+    public init?(_ object: PythonObject) {
+        return nil
+    }
+    
+    public var pythonObject: PythonObject {
+        let (classInfo, address) = DispatchQueue.main.sync {
+            let classInfo = Self.registeredClasses[className]
+            return (classInfo, self.address)
+        }
+        
+        guard let classInfo else {
+            Interpreter.log.fault("Tried to access unregistered class: \(className)")
+            return Python.None
+        }
+        
+        let module = Python.import(classInfo.module)
+        return module[dynamicMember: classInfo.name](address)
     }
 }
 
@@ -142,12 +157,14 @@ extension PythonBinding {
     }
 }
 
+// MARK: - PropertyRegistration
+
 public struct PropertyRegistration<Root: AnyObject> {
     public typealias Registerable = (PythonConvertible & ConvertibleFromPython)
-    
+
     let name: String
     let getter: (Root) -> PythonConvertible
-    let setter: ((inout Root, PythonObject) -> Void)?
+    let setter: (@MainActor (inout Root, PythonObject) -> Void)?
 
     var getterFunction: PythonObject {
         PythonFunction { pythonObject in
@@ -186,7 +203,17 @@ public struct PropertyRegistration<Root: AnyObject> {
             return Python.None
         }.pythonObject
     }
+}
 
+extension PropertyRegistration {
+    // MARK: - Value type binders
+    
+    /// Value type binder.
+    /// - Parameters:
+    ///   - name: Name of the property in Python.
+    ///   - getter: Getter binding.
+    ///   - setter: Setter binding.
+    /// - Returns: `PropertyRegistration`
     public static func bind<Value>(
         name: String,
         get getter: @escaping (Root) -> Value,
@@ -206,9 +233,136 @@ public struct PropertyRegistration<Root: AnyObject> {
             setter: anySetter
         )
     }
-}
+    
+    /// Value type property binder.
+    /// - Parameters:
+    ///   - name: Name of the property in Python
+    ///   - path: Path to the value
+    /// - Returns: `PropertyRegistration`
+    public static func set<Value>(_ name: String, _ path: KeyPath<Root, Value>) -> PropertyRegistration where Value: Registerable {
+        .bind(name: name,
+              get: { $0[keyPath: path] },
+              set: setterFromKeyPath(path))
+    }
+    
+    /// Value type property binder.
+    /// - Parameters:
+    ///   - path: Path to the value
+    /// - Returns: `PropertyRegistration`
+    public static func set<Value>(_ path: KeyPath<Root, Value>) -> PropertyRegistration where Value: Registerable {
+        .bind(name: nameFromKeyPath(path),
+              get: { $0[keyPath: path] },
+              set: setterFromKeyPath(path))
+    }
+    
+    // MARK: - Reference type binders
 
-public extension PropertyRegistration {
+    /// Reference type binder.
+    /// - Parameters:
+    ///   - name: Name of the property in Python.
+    ///   - getter: Getter binding.
+    ///   - setter: Setter binding.
+    /// - Returns: `PropertyRegistration`
+    public static func bind<Object>(
+        name: String,
+        get getter: @escaping (Root) -> Object,
+        set setter: ((inout Root, Object) -> Void)? = nil
+    ) -> PropertyRegistration where Object: PythonBindable {
+        let anySetter: (@MainActor (inout Root, PythonObject) -> Void)? = if let setter {
+            { root, pythonValue in
+                if let value = Object.from(pythonValue) {
+                    setter(&root, value)
+                }
+            }
+        } else { nil }
+
+        return PropertyRegistration<Root>(
+            name: name,
+            getter: getter,
+            setter: anySetter
+        )
+    }
+    
+    /// Reference type property binder.
+    /// - Parameters:
+    ///   - name: Name of the property in Python
+    ///   - path: Path to the object
+    /// - Returns: `PropertyRegistration`
+    public static func set<Object>(_ name: String, _ path: KeyPath<Root, Object>) -> PropertyRegistration where Object: PythonBindable {
+        return .bind(name: name,
+                     get: { $0[keyPath: path] },
+                     set: setterFromKeyPath(path))
+    }
+    
+    /// Reference type property binder.
+    /// - Parameters:
+    ///   - path: Path to the object
+    /// - Returns: `PropertyRegistration`
+    public static func set<Object>(_ path: KeyPath<Root, Object>) -> PropertyRegistration where Object: PythonBindable {
+        return .bind(name: nameFromKeyPath(path),
+                     get: { $0[keyPath: path] },
+                     set: setterFromKeyPath(path))
+    }
+
+    /// Optional reference type binder.
+    /// - Parameters:
+    ///   - name: Name of the property in Python.
+    ///   - getter: Getter binding.
+    ///   - setter: Setter binding.
+    /// - Returns: `PropertyRegistration`
+    public static func bind<Value>(
+        name: String,
+        get getter: @escaping (Root) -> Value?,
+        set setter: ((inout Root, Value?) -> Void)? = nil
+    ) -> PropertyRegistration where Value: PythonBindable {
+        let anySetter: (@MainActor (inout Root, PythonObject) -> Void)? = if let setter {
+            { root, pythonValue in
+                let value = Value.from(pythonValue)
+                setter(&root, value)
+            }
+        } else { nil }
+
+        return PropertyRegistration<Root>(
+            name: name,
+            getter: getter,
+            setter: anySetter
+        )
+    }
+    
+    /// Optional reference type property binder.
+    /// - Parameters:
+    ///   - name: Name of the property in Python
+    ///   - path: Path to the object
+    /// - Returns: `PropertyRegistration`
+    public static func set<Object>(_ name: String, _ path: KeyPath<Root, Object?>) -> PropertyRegistration where Object: PythonBindable {
+        .bind(name: name,
+              get: { $0[keyPath: path] },
+              set: setterFromKeyPath(path))
+    }
+    
+    /// Optional reference type property binder.
+    /// - Parameters:
+    ///   - path: Path to the object
+    /// - Returns: `PropertyRegistration`
+    public static func set<Object>(_ path: KeyPath<Root, Object?>) -> PropertyRegistration where Object: PythonBindable {
+        .bind(name: nameFromKeyPath(path),
+              get: { $0[keyPath: path] },
+              set: setterFromKeyPath(path))
+    }
+
+    static func nameFromKeyPath<Value>(_ path: KeyPath<Root, Value>) -> String {
+        let pathString = String(describing: path)
+        let lastElement = pathString.components(separatedBy: ".").last!
+        
+        // Convert to snake case.
+        return lastElement
+            .map { char in
+                if char.isUppercase { "_" + char.lowercased() }
+                else { "\(char)" }
+            }
+            .joined()
+    }
+    
     static func setterFromKeyPath<Value>(_ path: KeyPath<Root, Value>) -> ((inout Root, Value) -> Void)? {
         if let writablePath = path as? WritableKeyPath<Root, Value> {
             return { root, value in
@@ -217,13 +371,9 @@ public extension PropertyRegistration {
         }
         return nil
     }
-    
-    static func set<Value>(_ name: String, _ path: KeyPath<Root, Value>) -> PropertyRegistration where Value: Registerable {
-        .bind(name: name,
-              get: { $0[keyPath: path] },
-              set: setterFromKeyPath(path))
-    }
 }
+
+// MARK: - Errors
 
 public enum PythonBindingError: Error {
     case unregisteredType
