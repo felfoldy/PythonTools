@@ -26,6 +26,7 @@ public final class Interpreter {
     
     init() {
         queue.setSpecific(key: queueKey, value: ())
+        PythonCReferences.ensureReferences()
     }
     
     let defaultCompiler: Compiler = .evaluationCompiler

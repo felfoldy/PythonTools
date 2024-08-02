@@ -64,11 +64,7 @@ public struct PythonBinding {
     }
 }
 
-extension PythonBinding: PythonConvertible, ConvertibleFromPython {
-    public init?(_ object: PythonObject) {
-        return nil
-    }
-    
+extension PythonBinding: PythonConvertible {
     public var pythonObject: PythonObject {
         let (classInfo, address) = DispatchQueue.main.sync {
             let classInfo = Self.registeredClasses[className]
@@ -170,7 +166,7 @@ public struct PropertyRegistration<Root: AnyObject> {
         PythonFunction { pythonObject in
             let addressObj = pythonObject._address
             
-            let obj: Root? = DispatchQueue.main.sync {
+            let obj: Root? = DispatchQueue.main.sync { @MainActor in
                 guard let address = Int(addressObj) else {
                     return nil
                 }
