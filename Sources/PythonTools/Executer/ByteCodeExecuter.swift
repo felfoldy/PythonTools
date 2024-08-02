@@ -10,20 +10,19 @@ import Python
 
 struct ByteCodeExecuter {
     func execute(code: CompiledByteCode) async throws {
-        var executionTime: UInt64!
         var result: UnsafeMutablePointer<PyObject>?
         
         try await Interpreter.perform {
-            let startTime = DispatchTime.now()
-            
+            // TODO: Cache local and global dictionaries.
             let mainModule = PyImport_AddModule("__main__")
             let globals = PyModule_GetDict(mainModule)
             
+            PythonRuntimeMonitor.start()
+
+            // Code execution.
             result = PyEval_EvalCode(code.byteCode, globals, globals)
-            
-            let endTime = DispatchTime.now()
-            
-            executionTime = endTime.uptimeNanoseconds - startTime.uptimeNanoseconds
+
+            PythonRuntimeMonitor.end()
             
             if result == nil {
                 PyErr_Print()
@@ -32,7 +31,7 @@ struct ByteCodeExecuter {
         
         await Interpreter.shared.outputStream.finalize(
             codeId: code.id,
-            executionTime: executionTime
+            executionTime: PythonRuntimeMonitor.executionTime
         )
         
         guard let result else {

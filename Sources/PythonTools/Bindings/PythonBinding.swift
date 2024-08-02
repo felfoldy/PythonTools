@@ -20,7 +20,6 @@ public extension PythonBindable {
 }
 
 private extension PythonBindable {
-    @MainActor
     static func from(_ pythonObject: PythonObject) -> Self? {
         guard let address = Int(pythonObject._address) else {
             return nil
@@ -40,8 +39,7 @@ public struct PythonBinding {
     }
     
     // MARK: Memory address.
-    
-    @MainActor
+
     public var address: Int {
         guard let object else { return 0 }
         let reference = Unmanaged.passUnretained(object).toOpaque()
@@ -49,8 +47,7 @@ public struct PythonBinding {
         PythonBinding.registry[address] = self
         return address
     }
-    
-    @MainActor
+
     public static func from<Object: AnyObject>(address: Int) throws -> Object {
         guard let object = registry[address]?.object else {
             registry[address] = nil
@@ -89,10 +86,7 @@ struct PythonClassInfo {
 }
 
 extension PythonBinding {
-    @MainActor
     static var registry = [Int : PythonBinding]()
-
-    @MainActor
     static var registeredClasses = [String : PythonClassInfo]()
     
     public static func className<Object>(_ object: Object) -> String {
@@ -160,22 +154,28 @@ public struct PropertyRegistration<Root: AnyObject> {
 
     let name: String
     let getter: (Root) -> PythonConvertible
-    let setter: (@MainActor (inout Root, PythonObject) -> Void)?
+    let setter: ((inout Root, PythonObject) -> Void)?
 
     var getterFunction: PythonObject {
         PythonFunction { pythonObject in
-            let addressObj = pythonObject._address
+            PythonRuntimeMonitor.event("getter - cast arguments")
             
-            let obj: Root? = DispatchQueue.main.sync { @MainActor in
-                guard let address = Int(addressObj) else {
-                    return nil
-                }
-                return try? PythonBinding.from(address: address)
+            let addressObj = pythonObject._address
+            guard let address = Int(addressObj) else {
+                return Python.None
             }
+
+            PythonRuntimeMonitor.event("getter - object")
+            let obj: Root? = try? PythonBinding.from(address: address)
             
             guard let obj else { return Python.None }
+            
+            PythonRuntimeMonitor.event("getter - callback execution")
+            let result = getter(obj)
 
-            return getter(obj)
+            PythonRuntimeMonitor.event("getter - end")
+
+            return result
         }
         .pythonObject
     }
@@ -184,18 +184,20 @@ public struct PropertyRegistration<Root: AnyObject> {
         guard let setter else { return Python.None }
         
         return PythonFunction { pythonObjects in
+            PythonRuntimeMonitor.event("setter - cast arguments")
             let addressObj = pythonObjects[0]._address
             let pythonValue = pythonObjects[1]
             guard let address = Int(addressObj) else {
                 return Python.None
             }
-
-            DispatchQueue.main.sync {
-                if var obj: Root? = try? PythonBinding.from(address: address) {
-                    setter(&obj!, pythonValue)
-                }
+            
+            PythonRuntimeMonitor.event("setter - object")
+            if var obj: Root? = try? PythonBinding.from(address: address) {
+                PythonRuntimeMonitor.event("setter - callback execution")
+                setter(&obj!, pythonValue)
             }
 
+            PythonRuntimeMonitor.event("setter - end")
             return Python.None
         }.pythonObject
     }
@@ -264,7 +266,7 @@ extension PropertyRegistration {
         get getter: @escaping (Root) -> Object,
         set setter: ((inout Root, Object) -> Void)? = nil
     ) -> PropertyRegistration where Object: PythonBindable {
-        let anySetter: (@MainActor (inout Root, PythonObject) -> Void)? = if let setter {
+        let anySetter: ((inout Root, PythonObject) -> Void)? = if let setter {
             { root, pythonValue in
                 if let value = Object.from(pythonValue) {
                     setter(&root, value)
@@ -311,7 +313,7 @@ extension PropertyRegistration {
         get getter: @escaping (Root) -> Value?,
         set setter: ((inout Root, Value?) -> Void)? = nil
     ) -> PropertyRegistration where Value: PythonBindable {
-        let anySetter: (@MainActor (inout Root, PythonObject) -> Void)? = if let setter {
+        let anySetter: ((inout Root, PythonObject) -> Void)? = if let setter {
             { root, pythonValue in
                 let value = Value.from(pythonValue)
                 setter(&root, value)
