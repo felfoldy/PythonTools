@@ -24,6 +24,10 @@ class TestClass {
 }
 
 extension InnerTestClass: PythonBindable {
+    static var pythonClassName: String {
+        "InnerTestClass"
+    }
+    
     static func register() async throws {
         try await PythonBinding.register(
             InnerTestClass.self,
@@ -33,6 +37,10 @@ extension InnerTestClass: PythonBindable {
 }
 
 extension TestClass: PythonBindable {
+    static var pythonClassName: String {
+        "TestClass"
+    }
+    
     static func register() async throws {
         try await PythonBinding.register(
             TestClass.self,
@@ -51,12 +59,6 @@ extension TestClass: PythonBindable {
 enum TestNS { class TestClass {} }
 
 struct PythonBindingTests {
-    @Test
-    func className() {
-        #expect(PythonBinding.className(TestClass()) == "PythonToolsTests_TestClass")
-        #expect(PythonBinding.className(TestClass.self) == "PythonToolsTests_TestClass")
-        #expect(PythonBinding.className(TestNS.TestClass.self) == "PythonToolsTests_TestNS_TestClass")
-    }
 
     @Test
     @MainActor
@@ -102,10 +104,10 @@ struct PythonBindingTests {
         }
         
         @Test func register() async throws {
-            let testAddress = await binding.address
+            let testAddress = binding.address
             
             try await Interpreter.run(
-                "test = PythonToolsTests_TestClass(\(testAddress))"
+                "test = SwiftManaged_TestClass(\(testAddress))"
             )
             
             try await Interpreter.perform {

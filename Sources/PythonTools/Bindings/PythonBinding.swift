@@ -10,10 +10,17 @@ import Foundation
 import Python
 
 public protocol PythonBindable: AnyObject, PythonConvertible {
+    static var pythonModule: String { get }
+    static var pythonClassName: String { get }
     static func register() async throws
 }
 
 public extension PythonBindable {
+    static var pythonModule: String { "__main__" }
+    
+    var pythonModule: String { Self.pythonModule }
+    var pythonClassName: String { Self.pythonClassName }
+    
     var pythonObject: PythonObject {
         PythonBinding(self).pythonObject
     }
@@ -30,25 +37,23 @@ private extension PythonBindable {
 }
 
 public struct PythonBinding {
-    let className: String
-    weak var object: AnyObject?
+    weak var object: PythonBindable?
 
-    public init<Object: AnyObject>(_ object: Object) {
+    public init<Object: PythonBindable>(_ object: Object) {
         self.object = object
-        className = PythonBinding.className(object.self)
     }
     
     // MARK: Memory address.
 
     public var address: Int {
         guard let object else { return 0 }
-        let reference = Unmanaged.passUnretained(object).toOpaque()
+        let reference = Unmanaged.passUnretained(object as AnyObject).toOpaque()
         let address = Int(bitPattern: reference)
         PythonBinding.registry[address] = self
         return address
     }
 
-    public static func from<Object: AnyObject>(address: Int) throws -> Object {
+    public static func from<Object: PythonBindable>(address: Int) throws -> Object {
         guard let object = registry[address]?.object else {
             registry[address] = nil
             throw PythonBindingError.instanceDeallocated
@@ -63,44 +68,31 @@ public struct PythonBinding {
 
 extension PythonBinding: PythonConvertible {
     public var pythonObject: PythonObject {
-        let (classInfo, address) = DispatchQueue.main.sync {
-            let classInfo = Self.registeredClasses[className]
-            return (classInfo, self.address)
-        }
-        
-        guard let classInfo else {
-            Interpreter.log.fault("Tried to access unregistered class: \(className)")
+        guard let object else {
+            Interpreter.log.fault("Tried to access deallocated type")
             return Python.None
         }
-        
-        let module = Python.import(classInfo.module)
-        return module[dynamicMember: classInfo.name](address)
+
+        do {
+            let module = try Python.attemptImport(object.pythonModule)
+            return module[dynamicMember: "SwiftManaged_\(object.pythonClassName)"](address)
+        } catch {
+            return Python.None
+        }
     }
 }
 
 // MARK: Register class.
 
-struct PythonClassInfo {
-    let name: String
-    let module: String
-}
-
 extension PythonBinding {
     static var registry = [Int : PythonBinding]()
-    static var registeredClasses = [String : PythonClassInfo]()
-    
-    public static func className<Object>(_ object: Object) -> String {
-        let type = (object as? Any.Type) ?? type(of: object)
-        return String(reflecting: type)
-            .replacingOccurrences(of: ".", with: "_")
-    }
     
     public static func register<Object>(
         _ object: Object.Type,
         name: String? = nil, in moduleName: String? = nil,
         members: [PropertyRegistration<Object>]
     ) async throws {
-        let objectName = className(object)
+        let objectName = "SwiftManaged_\(object.pythonClassName)"
         
         // Register the Python class.
         try await Interpreter.run(
@@ -135,13 +127,6 @@ extension PythonBinding {
                 main[dynamicMember: objectName] = Python.None
             }
         }
-        
-        await MainActor.run {
-            registeredClasses[objectName] = PythonClassInfo(
-                name: name ?? objectName,
-                module: moduleName ?? "__main__"
-            )
-        }
 
         Interpreter.log.info("Registered binding: \(objectName)")
     }
@@ -149,7 +134,7 @@ extension PythonBinding {
 
 // MARK: - PropertyRegistration
 
-public struct PropertyRegistration<Root: AnyObject> {
+public struct PropertyRegistration<Root: PythonBindable> {
     public typealias Registerable = (PythonConvertible & ConvertibleFromPython)
 
     let name: String
