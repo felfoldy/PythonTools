@@ -24,6 +24,16 @@ public extension PythonBindable {
     var pythonObject: PythonObject {
         PythonBinding(self).pythonObject
     }
+    
+    static func withClassPythonObject(_ block: @escaping (PythonObject) -> Void) async throws {
+        let module = pythonModule
+        let name = pythonClassName
+        
+        try await Interpreter.perform {
+            let object = Python.import(module)[dynamicMember: name]
+            block(object)
+        }
+    }
 }
 
 private extension PythonBindable {
@@ -131,49 +141,22 @@ public struct PropertyRegistration<Root: PythonBindable> {
     let setter: ((inout Root, PythonObject) -> Void)?
 
     var getterFunction: PythonObject {
-        PythonFunction { pythonObject in
-            PythonRuntimeMonitor.event("getter - cast arguments")
-            
-            let addressObj = pythonObject._address
-            guard let address = Int(addressObj) else {
-                return Python.None
-            }
-
-            PythonRuntimeMonitor.event("getter - object")
-            let obj: Root? = try? PythonBinding.from(address: address)
-            
-            guard let obj else { return Python.None }
-            
-            PythonRuntimeMonitor.event("getter - callback execution")
+        .instanceFunction { (obj: Root) in
             let result = getter(obj)
 
             PythonRuntimeMonitor.event("getter - end")
-
             return result
         }
-        .pythonObject
     }
 
     var setterFunction: PythonObject {
         guard let setter else { return Python.None }
         
-        return PythonFunction { pythonObjects in
-            PythonRuntimeMonitor.event("setter - cast arguments")
-            let addressObj = pythonObjects[0]._address
-            let pythonValue = pythonObjects[1]
-            guard let address = Int(addressObj) else {
-                return Python.None
-            }
+        return .instanceMethod { (obj: inout Root, pythonValue) in
+            setter(&obj, pythonValue)
             
-            PythonRuntimeMonitor.event("setter - object")
-            if var obj: Root? = try? PythonBinding.from(address: address) {
-                PythonRuntimeMonitor.event("setter - callback execution")
-                setter(&obj!, pythonValue)
-            }
-
             PythonRuntimeMonitor.event("setter - end")
-            return Python.None
-        }.pythonObject
+        }
     }
 }
 
@@ -307,4 +290,30 @@ extension PropertyRegistration {
 public enum PythonBindingError: Error {
     case unregisteredType
     case instanceDeallocated
+}
+
+public extension PythonBindable {
+    
+    
+    static func method<Input: ConvertibleFromPython>(fn: @escaping (Self, Input) -> Void) -> PythonObject {
+        PythonFunction { pythonObjects in
+            PythonRuntimeMonitor.event("extract argument 0: self")
+            var args = pythonObjects
+            
+            let addressObj = args.removeFirst()._address
+            guard let address = Int(addressObj) else {
+                return Python.None
+            }
+            
+            let obj: Self? = try? PythonBinding.from(address: address)
+
+            PythonRuntimeMonitor.event("extract argument 1")
+            guard let obj, let argObj = args.first,
+                  let arg = Input(argObj) else { return Python.None }
+            
+            fn(obj, arg)
+            
+            return Python.None
+        }.pythonObject
+    }
 }

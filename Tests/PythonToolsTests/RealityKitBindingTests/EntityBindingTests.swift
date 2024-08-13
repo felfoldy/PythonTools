@@ -8,6 +8,7 @@
 import Testing
 import RealityKit
 import PythonTools
+import PythonKit
 
 extension Entity: @retroactive PythonBindable {
     public static var pythonClassName: String { "Entity" }
@@ -17,6 +18,12 @@ extension Entity: @retroactive PythonBindable {
             Entity.self,
             members: [.set("name", \.name)]
         )
+        
+        try await withClassPythonObject { object in
+            object.fetch_name = .instanceFunction { (entity: Entity) in
+                entity.name
+            }
+        }
     }
 }
 
@@ -47,5 +54,20 @@ extension Entity: @retroactive PythonBindable {
         let pythonEntity = entity.pythonObject
         
         #expect(pythonEntity.name == "name")
+    }
+}
+
+@Test func functionInjection() async throws {
+    let entity = await Entity()
+    await MainActor.run {
+        entity.name = "name"
+    }
+    
+    try await Entity.register()
+    
+    try await Interpreter.perform {
+        let pythonEntity = entity.pythonObject
+        
+        #expect(pythonEntity.fetch_name() == "name")
     }
 }
