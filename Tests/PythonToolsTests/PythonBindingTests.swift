@@ -31,7 +31,7 @@ extension InnerTestClass: PythonBindable {
     static func register() async throws {
         try await PythonBinding.register(
             InnerTestClass.self,
-            members: [.set(\.value)]
+            members: [.set("value", \.value)]
         )
     }
 }
@@ -45,12 +45,12 @@ extension TestClass: PythonBindable {
         try await PythonBinding.register(
             TestClass.self,
             members: [
-                .set(\.value),
-                .set(\.stringValue),
-                .set(\.floatValue),
-                .set(\.optionalValue),
-                .set(\.innerObject),
-                .set(\.optionalObject),
+                .set("value", \.value),
+                .set("string_value", \.stringValue),
+                .set("float_value", \.floatValue),
+                .set("optional_value", \.optionalValue),
+                .set("inner_object", \.innerObject),
+                .set("optional_object", \.optionalObject),
             ]
         )
     }

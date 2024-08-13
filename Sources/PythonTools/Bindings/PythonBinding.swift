@@ -217,16 +217,6 @@ extension PropertyRegistration {
               set: setterFromKeyPath(path))
     }
     
-    /// Value type property binder.
-    /// - Parameters:
-    ///   - path: Path to the value
-    /// - Returns: `PropertyRegistration`
-    public static func set<Value>(_ path: KeyPath<Root, Value>) -> PropertyRegistration where Value: Registerable {
-        .bind(name: nameFromKeyPath(path),
-              get: { $0[keyPath: path] },
-              set: setterFromKeyPath(path))
-    }
-    
     // MARK: - Reference type binders
 
     /// Reference type binder.
@@ -265,16 +255,6 @@ extension PropertyRegistration {
                      get: { $0[keyPath: path] },
                      set: setterFromKeyPath(path))
     }
-    
-    /// Reference type property binder.
-    /// - Parameters:
-    ///   - path: Path to the object
-    /// - Returns: `PropertyRegistration`
-    public static func set<Object>(_ path: KeyPath<Root, Object>) -> PropertyRegistration where Object: PythonBindable {
-        return .bind(name: nameFromKeyPath(path),
-                     get: { $0[keyPath: path] },
-                     set: setterFromKeyPath(path))
-    }
 
     /// Optional reference type binder.
     /// - Parameters:
@@ -310,29 +290,6 @@ extension PropertyRegistration {
         .bind(name: name,
               get: { $0[keyPath: path] },
               set: setterFromKeyPath(path))
-    }
-    
-    /// Optional reference type property binder.
-    /// - Parameters:
-    ///   - path: Path to the object
-    /// - Returns: `PropertyRegistration`
-    public static func set<Object>(_ path: KeyPath<Root, Object?>) -> PropertyRegistration where Object: PythonBindable {
-        .bind(name: nameFromKeyPath(path),
-              get: { $0[keyPath: path] },
-              set: setterFromKeyPath(path))
-    }
-
-    static func nameFromKeyPath<Value>(_ path: KeyPath<Root, Value>) -> String {
-        let pathString = String(describing: path)
-        let lastElement = pathString.components(separatedBy: ".").last!
-        
-        // Convert to snake case.
-        return lastElement
-            .map { char in
-                if char.isUppercase { "_" + char.lowercased() }
-                else { "\(char)" }
-            }
-            .joined()
     }
     
     static func setterFromKeyPath<Value>(_ path: KeyPath<Root, Value>) -> ((inout Root, Value) -> Void)? {
