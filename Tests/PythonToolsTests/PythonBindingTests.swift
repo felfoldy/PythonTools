@@ -107,7 +107,7 @@ struct PythonBindingTests {
             let testAddress = binding.address
             
             try await Interpreter.run(
-                "test = SwiftManaged_TestClass(\(testAddress))"
+                "test = TestClass(\(testAddress))"
             )
             
             try await Interpreter.perform {
@@ -163,22 +163,6 @@ struct PythonBindingTests {
                 
                 #expect(testObject.optionalValue == nil)
             }
-        }
-    }
-
-    @Test func registerInModule() async throws {
-        try await PythonBinding.register(
-            TestClass.self, name: "TestClass", in: "builtins",
-            members: [.set("value", \.value)]
-        )
-
-        let testObject = TestClass()
-        let address = await PythonBinding(testObject).address
-        
-        try await Interpreter.perform {
-            let builtins = Python.import("builtins")
-            let pythonObject = builtins.TestClass(address)
-            #expect(Int(pythonObject.value) == testObject.value)
         }
     }
     

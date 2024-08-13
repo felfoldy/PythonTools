@@ -75,7 +75,7 @@ extension PythonBinding: PythonConvertible {
 
         do {
             let module = try Python.attemptImport(object.pythonModule)
-            return module[dynamicMember: "SwiftManaged_\(object.pythonClassName)"](address)
+            return module[dynamicMember: object.pythonClassName](address)
         } catch {
             return Python.None
         }
@@ -89,28 +89,24 @@ extension PythonBinding {
     
     public static func register<Object>(
         _ object: Object.Type,
-        name: String? = nil, in moduleName: String? = nil,
         members: [PropertyRegistration<Object>]
     ) async throws {
-        let objectName = "SwiftManaged_\(object.pythonClassName)"
+        try await Interpreter.load(bundle: .module)
         
         // Register the Python class.
-        try await Interpreter.run(
-            """
-            class \(objectName):
-                def __init__(self, address: int):
-                    self._address = address
-            """
-        )
-        
-        // Set members.
         try await Interpreter.perform {
-            let main = Python.import("__main__")
-
-            let classDef = main[dynamicMember: objectName]
-
+            let swiftManaged = Python.import("swiftbinding").SwiftManagedObject
+            
+            let classDef = PythonClass(
+                object.pythonClassName,
+                superclasses: [swiftManaged]
+            ).pythonObject
+            
+            let module = try Python.attemptImport(object.pythonModule)
+            module[dynamicMember: object.pythonClassName] = classDef
+            
             let property = Python.import("builtins").property
-
+            
             for member in members {
                 classDef[dynamicMember: member.name] = property(
                     member.getterFunction,
@@ -119,16 +115,9 @@ extension PythonBinding {
                     Python.None
                 )
             }
-
-            // Move to module.
-            if let moduleName {
-                let module = Python.import(moduleName)
-                module[dynamicMember: name ?? objectName] = classDef
-                main[dynamicMember: objectName] = Python.None
-            }
         }
 
-        Interpreter.log.info("Registered binding: \(objectName)")
+        Interpreter.log.info("Registered binding: \(object.pythonModule).\(object.pythonClassName)")
     }
 }
 
