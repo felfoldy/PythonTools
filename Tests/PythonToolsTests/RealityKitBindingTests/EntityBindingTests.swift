@@ -10,23 +10,6 @@ import RealityKit
 import PythonTools
 import PythonKit
 
-extension Entity: @retroactive PythonBindable {
-    public static var pythonClassName: String { "Entity" }
-    
-    public static func register() async throws {
-        try await PythonBinding.register(
-            Entity.self,
-            members: [.set("name", \.name)]
-        )
-        
-        try await withClassPythonObject { object in
-            object.fetch_name = .instanceFunction { (entity: Entity) in
-                entity.name
-            }
-        }
-    }
-}
-
 @Test func entityName() async throws {
     let entity = await Entity()
     await MainActor.run {

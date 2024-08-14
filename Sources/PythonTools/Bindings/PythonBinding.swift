@@ -46,6 +46,12 @@ private extension PythonBindable {
     }
 }
 
+enum SubReferences {
+    typealias PropertyReference = [String : PythonBindable]
+    
+    static var map: [Int : PropertyReference] = [:]
+}
+
 public struct PythonBinding {
     weak var object: PythonBindable?
 
@@ -66,6 +72,7 @@ public struct PythonBinding {
     public static func from<Object: PythonBindable>(address: Int) throws -> Object {
         guard let object = registry[address]?.object else {
             registry[address] = nil
+            SubReferences.map[address] = nil
             throw PythonBindingError.instanceDeallocated
         }
         
@@ -99,13 +106,14 @@ extension PythonBinding {
     
     public static func register<Object>(
         _ object: Object.Type,
+        subclass: String = "SwiftManagedObject",
         members: [PropertyRegistration<Object>]
     ) async throws {
         try await Interpreter.load(bundle: .module)
         
         // Register the Python class.
         try await Interpreter.perform {
-            let swiftManaged = Python.import("swiftbinding").SwiftManagedObject
+            let swiftManaged = Python.import("swiftbinding")[dynamicMember: subclass]
             
             let classDef = PythonClass(
                 object.pythonClassName,
@@ -283,6 +291,33 @@ extension PropertyRegistration {
         }
         return nil
     }
+
+    public static func cache<Value>(
+        _ name: String,
+        make: @escaping (Root) -> Value
+    ) -> PropertyRegistration where Value: PythonBindable {
+        PropertyRegistration<Root>(
+            name: name,
+            getter: { root in
+                let address = PythonBinding(root).address
+                
+                guard let references = SubReferences.map[address] else {
+                    let newReference = make(root)
+                    SubReferences.map[address] = [name : newReference]
+                    return newReference
+                }
+
+                if let reference = references[name] {
+                    return reference
+                }
+
+                let newReference = make(root)
+                SubReferences.map[address]?[name] = newReference
+                return newReference
+            },
+            setter: nil
+        )
+    }
 }
 
 // MARK: - Errors
@@ -290,30 +325,4 @@ extension PropertyRegistration {
 public enum PythonBindingError: Error {
     case unregisteredType
     case instanceDeallocated
-}
-
-public extension PythonBindable {
-    
-    
-    static func method<Input: ConvertibleFromPython>(fn: @escaping (Self, Input) -> Void) -> PythonObject {
-        PythonFunction { pythonObjects in
-            PythonRuntimeMonitor.event("extract argument 0: self")
-            var args = pythonObjects
-            
-            let addressObj = args.removeFirst()._address
-            guard let address = Int(addressObj) else {
-                return Python.None
-            }
-            
-            let obj: Self? = try? PythonBinding.from(address: address)
-
-            PythonRuntimeMonitor.event("extract argument 1")
-            guard let obj, let argObj = args.first,
-                  let arg = Input(argObj) else { return Python.None }
-            
-            fn(obj, arg)
-            
-            return Python.None
-        }.pythonObject
-    }
 }
