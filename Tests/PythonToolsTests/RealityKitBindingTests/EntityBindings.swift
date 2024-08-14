@@ -19,7 +19,7 @@ extension Entity: @retroactive PythonBindable {
             Entity.self,
             members: [
                 .set("name", \.name),
-                .cache("children", make: { PythonCollection(base: $0, path: \.children) })
+                .collection("children", \.children)
             ]
         )
         

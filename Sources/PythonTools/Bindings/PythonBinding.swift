@@ -318,6 +318,16 @@ extension PropertyRegistration {
             setter: nil
         )
     }
+    
+    public static func collection<Value: Collection>(
+        _ name: String,
+        _ path: KeyPath<Root, Value>
+    ) -> PropertyRegistration where Value.Element: PythonConvertible,
+                                    Value.Index: ConvertibleFromPython {
+        .cache(name) { root in
+            PythonCollection(base: root, path: path)
+        }
+    }
 }
 
 // MARK: - Errors
