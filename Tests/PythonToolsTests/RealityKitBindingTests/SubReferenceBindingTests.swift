@@ -38,4 +38,23 @@ struct EntityChildCollectionTests {
             #expect(child.name == "child")
         }
     }
+    
+    @MainActor
+    @Test func valueBinding() async throws {
+        try await Entity.register()
+        
+        let entity = Entity()
+        
+        try await Interpreter.perform {
+            let pythonObject = entity.pythonObject
+            #expect(pythonObject.transform.pos_x == 0)
+        }
+
+        entity.transform.translation.x = 3
+        
+        try await Interpreter.perform {
+            let pythonObject = entity.pythonObject
+            #expect(pythonObject.transform.pos_x == 3)
+        }
+    }
 }

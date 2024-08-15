@@ -34,8 +34,11 @@ public final class CompiledByteCode: Identifiable {
     }
     
     deinit {
-        Interpreter.shared.syncQueue {
-            Py_DecRef(byteCode)
+        Interpreter.log.trace("deinit \(self.id)")
+        Task { [byteCode] in
+            try? await Interpreter.perform {
+                Py_DecRef(byteCode)
+            }
         }
     }
 }

@@ -8,7 +8,7 @@
 import Python
 import Foundation
 
-public struct BytCodeCompiler: Compiler {
+public struct ByteCodeCompiler: Compiler {
     enum Error: LocalizedError {
         case failed(String)
         
@@ -53,6 +53,11 @@ public struct BytCodeCompiler: Compiler {
             
             if byteCode != nil {
                 Py_IncRef(byteCode)
+            } else {
+                if PyErr_Occurred() != nil {
+                    PyErr_Print()
+                    PyErr_Clear()
+                }
             }
         }
         
@@ -64,16 +69,16 @@ public struct BytCodeCompiler: Compiler {
     }
 }
 
-public extension Compiler where Self == BytCodeCompiler {
-    static var evaluationCompiler: BytCodeCompiler {
-        BytCodeCompiler(type: .evaluation)
+public extension Compiler where Self == ByteCodeCompiler {
+    static var evaluationCompiler: ByteCodeCompiler {
+        ByteCodeCompiler(type: .evaluation)
     }
     
-    static var singleCompiler: BytCodeCompiler {
-        BytCodeCompiler(type: .single)
+    static var singleCompiler: ByteCodeCompiler {
+        ByteCodeCompiler(type: .single)
     }
     
-    static var fileCompiler: BytCodeCompiler {
-        BytCodeCompiler(type: .file)
+    static var fileCompiler: ByteCodeCompiler {
+        ByteCodeCompiler(type: .file)
     }
 }

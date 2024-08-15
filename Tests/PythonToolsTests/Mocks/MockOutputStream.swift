@@ -8,6 +8,7 @@
 import PythonTools
 import Foundation
 
+@MainActor
 class MockOutputStream: PythonTools.OutputStream {
     var outputBuffer: [String] = []
     var errorBuffer: [String] = []

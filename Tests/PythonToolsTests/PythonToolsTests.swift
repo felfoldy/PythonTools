@@ -2,9 +2,10 @@ import Testing
 import Foundation
 @testable import PythonTools
 
+@MainActor
 @Test func bundleLoad() async throws {
     let output = MockOutputStream()
-    await Interpreter.output(to: output)
+    Interpreter.output(to: output)
     
     try await Interpreter.load(bundle: Bundle.module)
     

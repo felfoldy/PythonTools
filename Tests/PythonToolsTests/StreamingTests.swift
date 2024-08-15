@@ -13,10 +13,11 @@ extension Tag {
 }
 
 @Suite(.tags(.outputStreaming))
+@MainActor
 struct OutputStreamingTests {
     let outputStream = MockOutputStream()
     
-    @MainActor init() {
+    init() {
         Interpreter.output(to: outputStream)
     }
     
@@ -24,7 +25,7 @@ struct OutputStreamingTests {
     func simplePrint() async throws {
         try await Interpreter.run("print('message')")
         
-        await #expect(outputStream.output == "message")
+        #expect(outputStream.output == "message")
         #expect(outputStream.finalizeCallCount == 1)
     }
     
@@ -46,7 +47,8 @@ struct OutputStreamingTests {
         #expect(outputStream.lastEvaluationResult == "4")
     }
     
-    @Test func executionTime() async throws {
+    @Test
+    func executionTime() async throws {
         try await Interpreter.run("print('something')")
         
         let executionTime = try #require(outputStream.lastExecutionTime)
@@ -66,12 +68,12 @@ struct OutputStreamingTests {
                   case let .compilationFailure(message) = error else {
                 return false
             }
-
+            
             return message == outputStream.errorMessage
                 .trimmingCharacters(in: .whitespacesAndNewlines)
         }
 
-        await #expect(!outputStream.errorMessage.isEmpty)
+        #expect(!outputStream.errorMessage.isEmpty)
     }
     
     @Test("Execution error", .tags(.errorHandling), arguments: [
@@ -91,7 +93,7 @@ struct OutputStreamingTests {
             return message.trimmingCharacters(in: .whitespacesAndNewlines) == outputStream.errorMessage
         }
 
-        await #expect(!outputStream.errorMessage.isEmpty)
+        #expect(!outputStream.errorMessage.isEmpty)
     }
     
     @Test func clear() async throws {

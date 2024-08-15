@@ -7,8 +7,11 @@
 
 import Foundation
 
+@MainActor
 public protocol OutputStream: AnyObject {
+    @MainActor
     var outputBuffer: [String] { get set }
+    @MainActor
     var errorBuffer: [String] { get set }
 
     /// Signals the end of the code execution to finalize the buffers.

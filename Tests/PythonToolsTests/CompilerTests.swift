@@ -17,14 +17,14 @@ struct CompilerTests {
     
     @Test func preserveId() async throws {
         let compilableCode = CompilableCode(source: "print('secret')")
-        let byteCode = try await BytCodeCompiler(type: .single)
+        let byteCode = try await ByteCodeCompiler(type: .single)
             .compile(code: compilableCode)
         
         #expect(compilableCode.id == byteCode.id)
     }
     
     @Test func evaluationCompiler() async throws {
-        let evalCompiler = BytCodeCompiler(type: .evaluation)
+        let evalCompiler = ByteCodeCompiler(type: .evaluation)
         
         await #expect(throws: Never.self) {
             try await evalCompiler.compile("12 + 3")

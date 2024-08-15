@@ -328,6 +328,17 @@ extension PropertyRegistration {
             PythonCollection(base: root, path: path)
         }
     }
+
+    public static func value<Element, Binding>(
+        _ name: String,
+        _ path: KeyPath<Root, Element>,
+        as type: Binding.Type
+    ) -> PropertyRegistration<Root> where Binding: PythonValueBindable<Element>,
+                                          Binding: PythonBindable {
+        cache(name) { (root: Root) in
+            Binding(base: root, path: path)
+        }
+    }
 }
 
 // MARK: - Errors

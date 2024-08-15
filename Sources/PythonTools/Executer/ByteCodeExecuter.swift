@@ -9,9 +9,8 @@ import Foundation
 import Python
 
 struct ByteCodeExecuter {
+    @MainActor
     func execute(code: CompiledByteCode) async throws {
-        var result: UnsafeMutablePointer<PyObject>?
-        
         try await Interpreter.perform {
             // TODO: Cache local and global dictionaries.
             let mainModule = PyImport_AddModule("__main__")
@@ -19,44 +18,45 @@ struct ByteCodeExecuter {
             
             PythonRuntimeMonitor.start()
 
+            PyErr_Clear()
+            
             // Code execution.
-            result = PyEval_EvalCode(code.byteCode, globals, globals)
+            let result = PyEval_EvalCode(code.byteCode, globals, globals)
 
             PythonRuntimeMonitor.end()
             
-            if result == nil {
+            if result == nil, PyErr_Occurred() != nil {
                 PyErr_Print()
             }
-        }
-        
-        await Interpreter.shared.outputStream.finalize(
-            codeId: code.id,
-            executionTime: PythonRuntimeMonitor.executionTime
-        )
-        
-        guard let result else {
-            let error = await Interpreter.shared.outputStream.errorMessage
             
-            throw InterpreterError.executionFailure(error)
-        }
-        
-        defer { Py_DecRef(result) }
-        
-        // Fetch evaluation result.
-        
-        guard Py_IsNone(result) == 0 else { return }
+            Interpreter.shared.outputStream.finalize(
+                codeId: code.id,
+                executionTime: PythonRuntimeMonitor.executionTime
+            )
+            
+            guard let result else {
+                let error = Interpreter.shared.outputStream.errorMessage
+                Interpreter.log.error("\(code.id) - \(error)")
+                throw InterpreterError.executionFailure(error)
+            }
+            
+            defer { Py_DecRef(result) }
+            
+            // Fetch evaluation result.
+            guard Py_IsNone(result) == 0 else { return }
 
-        guard let resultStr = PyObject_Str(result) else {
-            return
+            guard let resultStr = PyObject_Str(result) else {
+                return
+            }
+            
+            if let resultCStr = PyUnicode_AsUTF8(resultStr) {
+                let resultString = String(cString: resultCStr)
+                Interpreter.shared.outputStream
+                    .evaluation(result: resultString)
+            }
+            
+            Py_DecRef(resultStr)
         }
-
-        if let resultCStr = PyUnicode_AsUTF8(resultStr) {
-            let resultString = String(cString: resultCStr)
-            await Interpreter.shared.outputStream
-                .evaluation(result: resultString)
-        }
-        
-        Py_DecRef(resultStr)
     }
 }
 

@@ -33,11 +33,15 @@ public final class Interpreter {
         .fallback(to: .fileCompiler)
         .outputError()
 
-    public static func run(_ script: String) async throws {
+    public static func run(_ script: String, file: String = #file, line: Int = #line) async throws {
         let compilableCode = CompilableCode(source: script)
 
+        let path = "<\(URL(string: file)!.lastPathComponent):\(line)>"
+        Interpreter.log.info("\(path) Compile: \(compilableCode.id)")
+        
         let compiledCode = try await Interpreter.compile(code: compilableCode)
 
+        Interpreter.log.info("\(path) Run: \(compiledCode.id)")
         try await Interpreter.execute(compiledCode: compiledCode)
     }
     
@@ -50,13 +54,14 @@ public final class Interpreter {
         shared.outputStream = outputStream
     }
     
+    @MainActor
     public static func load(bundle: Bundle) async throws {
         guard let identifier = bundle.bundleIdentifier,
-              await !shared.loadedModules.contains(identifier) else {
+              !shared.loadedModules.contains(identifier) else {
             return
         }
-
-        log.info("load \(identifier)")
+        
+        shared.loadedModules.insert(identifier)
 
         bundle.load()
         
@@ -69,9 +74,7 @@ public final class Interpreter {
             sys.path.append(path)
         }
         
-        await MainActor.run {
-            _ = shared.loadedModules.insert(identifier)
-        }
+        log.info("load \(identifier)")
     }
     
     public static func completions(code: String) async throws -> [String] {
@@ -79,7 +82,7 @@ public final class Interpreter {
         
         var compeltionsResult = [String]()
         try await shared.perform {
-            let interpreter = Python.import("interpreter")
+            let interpreter = try Python.attemptImport("interpreter")
             let results = interpreter._completions(code)
                 .compactMap(String.init)
 
@@ -94,9 +97,21 @@ extension Interpreter {
         try await withCheckedThrowingContinuation { continuation in
             queue.async {
                 if !Interpreter.shared.isInitialized {
-                    Interpreter.shared.initializePythonEnvironment()
+                    DispatchQueue.main.sync {
+                        Interpreter.shared.initializePythonEnvironment()
+                    }
                 }
 
+                let interpreterState = PyInterpreterState_Head()
+                let tState = PyThreadState_New(interpreterState)
+                PyEval_RestoreThread(tState)
+
+                defer {
+                    PyEval_SaveThread()
+                    PyThreadState_Clear(tState)
+                    PyThreadState_Delete(tState)
+                }
+                
                 do {
                     try block()
                     
@@ -118,29 +133,24 @@ extension Interpreter {
         }
     }
     
+    @MainActor
     private func initializePythonEnvironment() {
         PyBundler.shared.pyInit()
         let sys = Python.import("sys")
 
         // Inject output stream
         sys.stdout.write = .inject { (str: String) in
-            Task { @MainActor in
-                Interpreter.shared.outputStream.receive(output: str)
-            }
+            Interpreter.shared.outputStream.receive(output: str)
         }
 
         sys.stderr.write = .inject { (str: String) in
-            Task { @MainActor in
-                Interpreter.shared.outputStream.receive(error: str)
-            }
+            Interpreter.shared.outputStream.receive(error: str)
         }
         
         let main = Python.import("__main__")
         
         main.clear = .inject {
-            Task { @MainActor in
-                Interpreter.shared.outputStream.clear()
-            }
+            Interpreter.shared.outputStream.clear()
         }
         
         let major = sys.version_info.major
@@ -148,5 +158,6 @@ extension Interpreter {
         Interpreter.log.info("Initialized Python v\(major).\(minor)")
 
         isInitialized = true
+        PyEval_SaveThread()
     }
 }
