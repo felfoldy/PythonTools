@@ -11,7 +11,8 @@ enum PythonCReferences {
     public static var references: [Any] = [
         PyRun_SimpleString,
         PyCFunction_NewEx,
-        PyTuple_SetItem
+        PyTuple_SetItem,
+        PyInstanceMethod_New,
     ]
     
     public static func ensureReferences() {

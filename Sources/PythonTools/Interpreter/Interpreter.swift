@@ -22,10 +22,8 @@ public final class Interpreter {
     private var loadedModules = Set<String>()
     private let queue = DispatchQueue(label: "PythonQueue",
                                       qos: .userInteractive)
-    private let queueKey = DispatchSpecificKey<Void>()
     
     init() {
-        queue.setSpecific(key: queueKey, value: ())
         PythonCReferences.ensureReferences()
     }
     
@@ -119,16 +117,6 @@ extension Interpreter {
                 } catch {
                     continuation.resume(throwing: error)
                 }
-            }
-        }
-    }
-    
-    public func syncQueue(block: () -> Void) {
-        if queue.getSpecific(key: queueKey) != nil {
-            block()
-        } else {
-            queue.sync {
-                block()
             }
         }
     }
