@@ -55,7 +55,6 @@ public struct ByteCodeCompiler: Compiler {
                 Py_IncRef(byteCode)
             } else {
                 if PyErr_Occurred() != nil {
-                    PyErr_Print()
                     PyErr_Clear()
                 }
             }

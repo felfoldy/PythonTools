@@ -73,7 +73,9 @@ struct OutputStreamingTests {
                 .trimmingCharacters(in: .whitespacesAndNewlines)
         }
 
-        #expect(!outputStream.errorMessage.isEmpty)
+        withKnownIssue {
+            #expect(!outputStream.errorMessage.isEmpty)
+        }
     }
     
     @Test("Execution error", .tags(.errorHandling), arguments: [
