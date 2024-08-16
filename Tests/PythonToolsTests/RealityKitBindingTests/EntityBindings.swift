@@ -14,7 +14,7 @@ class TransformComponent: PythonValueBindable<Transform>, PythonBindable {
     
     static func register() async throws {
         try await PythonBinding.register(TransformComponent.self, members: [
-            .set("pos_x", \.value.translation.x)
+            .set("pos_x", \.value?.translation.x)
         ])
     }
 }
