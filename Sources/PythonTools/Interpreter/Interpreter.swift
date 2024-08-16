@@ -33,13 +33,11 @@ public final class Interpreter {
 
     public static func run(_ script: String, file: String = #file, line: Int = #line) async throws {
         let compilableCode = CompilableCode(source: script)
-
         let path = "<\(URL(string: file)!.lastPathComponent):\(line)>"
-        Interpreter.log.info("\(path) Compile: \(compilableCode.id)")
-        
+        trace(compilableCode.id, "\(path) run initied")
+                
         let compiledCode = try await Interpreter.compile(code: compilableCode)
 
-        Interpreter.log.info("\(path) Run: \(compiledCode.id)")
         try await Interpreter.execute(compiledCode: compiledCode)
     }
     

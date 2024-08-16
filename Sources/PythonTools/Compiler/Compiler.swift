@@ -34,7 +34,7 @@ public final class CompiledByteCode: Identifiable {
     }
     
     deinit {
-        Interpreter.log.trace("deinit \(self.id)")
+        Interpreter.trace(id, "bytecode deinit")
         Task { [byteCode] in
             try? await Interpreter.perform {
                 Py_DecRef(byteCode)

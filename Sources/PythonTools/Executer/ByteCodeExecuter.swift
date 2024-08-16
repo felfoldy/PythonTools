@@ -12,6 +12,7 @@ struct ByteCodeExecuter {
     @MainActor
     func execute(code: CompiledByteCode) async throws {
         try await Interpreter.perform {
+            Interpreter.trace(code.id, "run")
             // TODO: Cache local and global dictionaries.
             let mainModule = PyImport_AddModule("__main__")
             let globals = PyModule_GetDict(mainModule)
@@ -36,7 +37,7 @@ struct ByteCodeExecuter {
             
             guard let result else {
                 let error = Interpreter.shared.outputStream.errorMessage
-                Interpreter.log.error("\(code.id) - \(error)")
+                Interpreter.trace(code.id, "run failed - \(error)")
                 throw InterpreterError.executionFailure(error)
             }
             

@@ -30,4 +30,15 @@ struct CompilerTests {
             try await evalCompiler.compile("12 + 3")
         }
     }
+    
+    @Test func skipCompile() async throws {
+        let compiler = ByteCodeCompiler(type: .evaluation)
+        
+        await #expect(throws: ByteCodeCompiler.Error.self) {
+            try await compiler.compile("""
+            print(1)
+            print(2)
+            """)
+        }
+    }
 }

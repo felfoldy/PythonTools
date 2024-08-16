@@ -10,12 +10,15 @@ import Foundation
 
 public struct ByteCodeCompiler: Compiler {
     enum Error: LocalizedError {
+        case multilineSource
         case failed(String)
         
         var errorDescription: String? {
             switch self {
             case let .failed(code):
                 "Failed to compile: \(code)"
+            case .multilineSource:
+                "Multiline source can only be compiled as file type"
             }
         }
     }
@@ -37,11 +40,23 @@ public struct ByteCodeCompiler: Compiler {
             case .file: Py_file_input
             }
         }
+        
+        var name: String {
+            switch self {
+            case .evaluation: "evaluation"
+            case .single: "single"
+            case .file: "file"
+            }
+        }
     }
     
     let type: CompilerType
     
     public func compile(code: CompilableCode) async throws -> CompiledByteCode {
+        if type != .file && code.source.contains(where: \.isNewline) {
+            throw Error.multilineSource
+        }
+        
         var byteCode: UnsafeMutablePointer<PyObject>?
 
         try await Interpreter.perform {
@@ -61,6 +76,7 @@ public struct ByteCodeCompiler: Compiler {
         }
         
         if let byteCode {
+            Interpreter.trace(code.id, "compiled [\(type.name)]")
             return CompiledByteCode(id: code.id, byteCode: byteCode)
         }
         
