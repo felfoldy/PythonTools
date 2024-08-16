@@ -135,9 +135,14 @@ extension Interpreter {
         
         let main = Python.import("__main__")
         
-        main.clear = .inject {
+        main._clear = .inject {
             Interpreter.shared.outputStream.clear()
         }
+        
+        PyRun_SimpleString("""
+        def clear():
+            _clear()
+        """)
         
         let major = sys.version_info.major
         let minor = sys.version_info.minor
