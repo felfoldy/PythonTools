@@ -33,7 +33,7 @@ extension PythonCollection: PythonBindable {
     public static func register() async throws {
         try await PythonBinding.register(PythonCollection.self, subclass: "SwiftManagedCollection", members: [])
         
-        try await withClassPythonObject { pythonClass in
+        try await withPythonClass { pythonClass in
             pythonClass.__len__ = .instanceFunction { (collection: Self) in
                 collection.getter()?.count
             }

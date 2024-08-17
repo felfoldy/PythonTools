@@ -25,7 +25,7 @@ public extension PythonBindable {
         PythonBinding(self).pythonObject
     }
     
-    static func withClassPythonObject(_ block: @escaping (PythonObject) -> Void) async throws {
+    static func withPythonClass(_ block: @escaping (PythonObject) -> Void) async throws {
         let module = pythonModule
         let name = pythonClassName
         
@@ -326,17 +326,6 @@ extension PropertyRegistration {
                                     Value.Index: ConvertibleFromPython {
         .cache(name) { root in
             PythonCollection(base: root, path: path)
-        }
-    }
-
-    public static func value<Element, Binding>(
-        _ name: String,
-        _ path: KeyPath<Root, Element>,
-        as type: Binding.Type
-    ) -> PropertyRegistration<Root> where Binding: PythonValueBindable<Element>,
-                                          Binding: PythonBindable {
-        cache(name) { (root: Root) in
-            Binding(base: root, path: path)
         }
     }
 }

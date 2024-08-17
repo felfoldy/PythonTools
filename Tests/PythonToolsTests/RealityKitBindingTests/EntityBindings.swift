@@ -35,7 +35,7 @@ extension Entity: @retroactive PythonBindable {
             ]
         )
         
-        try await withClassPythonObject { object in
+        try await withPythonClass { object in
             object.fetch_name = .instanceFunction { (entity: Entity) in
                 entity.name
             }

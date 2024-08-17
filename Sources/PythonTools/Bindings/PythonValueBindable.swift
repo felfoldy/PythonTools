@@ -57,3 +57,31 @@ open class PythonValueBindable<Value> {
         Interpreter.log.debug("Value binding deleted")
     }
 }
+
+// MARK: - Property registration
+
+extension PropertyRegistration {
+    /// Value binding with optional path.
+    public static func value<Element, Binding>(
+        _ name: String,
+        _ path: KeyPath<Root, Element>,
+        as type: Binding.Type
+    ) -> PropertyRegistration<Root> where Binding: PythonValueBindable<Element>,
+                                          Binding: PythonBindable {
+        cache(name) { (root: Root) in
+            Binding(base: root, path: path)
+        }
+    }
+    
+    /// Value binding with optional path.
+    public static func value<Element, Binding>(
+        _ name: String,
+        _ path: KeyPath<Root, Element?>,
+        as type: Binding.Type
+    ) -> PropertyRegistration<Root> where Binding: PythonValueBindable<Element>,
+                                          Binding: PythonBindable {
+        cache(name) { (root: Root) in
+            Binding(base: root, path: path)
+        }
+    }
+}
