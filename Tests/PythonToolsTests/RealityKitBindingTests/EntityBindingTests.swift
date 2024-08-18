@@ -10,47 +10,36 @@ import RealityKit
 import PythonTools
 import PythonKit
 
-@Test func entityName() async throws {
-    let entity = await Entity()
-    await MainActor.run {
-        entity.name = "name"
-    }
+@MainActor
+@Test
+func entityName() async throws {
+    let entity = Entity()
+    entity.name = "name"
     
-    try await Entity.register()
-    
-    try await Interpreter.perform {
-        let pythonEntity = entity.pythonObject
-        
+    try await PythonBinding.make(entity).withPythonObject { pythonEntity in
         #expect(pythonEntity.name == "name")
     }
 }
 
-@Test func entitySubclass() async throws {
-    let entity = await ModelEntity()
-    await MainActor.run {
-        entity.name = "name"
-    }
+@MainActor
+@Test
+func entitySubclass() async throws {
+    let entity = ModelEntity()
+    entity.name = "name"
     
-    try await Entity.register()
-    
-    try await Interpreter.perform {
-        let pythonEntity = entity.pythonObject
-        
+    try await PythonBinding.make(entity).withPythonObject { pythonEntity in
         #expect(pythonEntity.name == "name")
     }
 }
 
+@MainActor
 @Test func functionInjection() async throws {
-    let entity = await Entity()
-    await MainActor.run {
-        entity.name = "name"
-    }
+    let entity = Entity()
+    entity.name = "name"
     
     try await Entity.register()
     
-    try await Interpreter.perform {
-        let pythonEntity = entity.pythonObject
-        
+    try await PythonBinding.make(entity).withPythonObject { pythonEntity in
         #expect(pythonEntity.fetch_name() == "name")
     }
 }

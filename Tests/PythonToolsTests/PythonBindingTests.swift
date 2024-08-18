@@ -70,7 +70,7 @@ struct PythonBindingTests {
 
         try #require(address != 0)
 
-        try await binding?.withPythonObject { pythonObject in
+        try await binding.withPythonObject { pythonObject in
             let testClass = TestClass.from(pythonObject)
             
             #expect(testClass === test)
@@ -83,16 +83,16 @@ struct PythonBindingTests {
         var test: TestClass? = TestClass()
         let binding = try await PythonBinding.make(test!)
 
-        try await binding?.withPythonObject { pythonObject in
+        try await binding.withPythonObject { pythonObject in
             #expect(pythonObject != Python.None)
         }
         
         test = nil
 
-        try await Task.sleep(nanoseconds: 100)
+        try await Task.sleep(nanoseconds: 1)
         
         var isRan = false
-        try await binding?.withPythonObject { pythonObject in
+        try await binding.withPythonObject { pythonObject in
             isRan = true
         }
         
@@ -106,7 +106,7 @@ struct PythonBindingTests {
         init() async throws {
             try await TestClass.register()
             testObject = TestClass()
-            self.binding = try await PythonBinding.make(testObject)!
+            self.binding = try await PythonBinding.make(testObject)
         }
         
         @Test func register() async throws {
@@ -177,14 +177,14 @@ struct PythonBindingTests {
         
         let binding = try await PythonBinding.make(testObject)
         
-        try await binding?.withPythonObject { pythonObject in
+        try await binding.withPythonObject { pythonObject in
             #expect(pythonObject.inner_object.value == "hidden")
         }
         
         let newInnerObject = InnerTestClass()
         newInnerObject.value = "revealed"
         
-        try await binding?.withPythonObject { pythonObject in
+        try await binding.withPythonObject { pythonObject in
             pythonObject.inner_object = newInnerObject.pythonObject
             
             #expect(pythonObject.inner_object.value == "revealed")

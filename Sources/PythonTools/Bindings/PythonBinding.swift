@@ -95,7 +95,7 @@ public class PythonBinding {
     }
     
     @discardableResult
-    public static func make<Object: PythonBindable>(_ object: Object) async throws -> PythonBinding? {
+    public static func make<Object: PythonBindable>(_ object: Object) async throws -> PythonBinding {
         if !PythonBinding.registeredClasses.contains(Object.pythonClassName) {
             try await Object.register()
         }
@@ -105,6 +105,11 @@ public class PythonBinding {
             binding = PythonBinding(address: object.address, object)
         }
         
+        guard let binding else {
+            // This should never be called
+            throw PythonBindingError.unregisteredType
+        }
+                
         return binding
     }
     
