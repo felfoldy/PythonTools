@@ -62,35 +62,41 @@ struct PythonBindingTests {
 
     @Test
     @MainActor
-    func address() throws {
+    func init_shouldRegisterBinding() async throws {
         let test = TestClass()
+        let address = test.address
         
-        let address = PythonBinding(test).address
+        let binding = try await PythonBinding.make(test)
 
         try #require(address != 0)
 
-        let result: TestClass = try PythonBinding.from(address: address)
-        
-        #expect(result.value == 4)
-        
-        test.value = 8
-        
-        #expect(result.value == 8)
+        try await binding?.withPythonObject { pythonObject in
+            let testClass = TestClass.from(pythonObject)
+            
+            #expect(testClass === test)
+        }
     }
     
     @Test
     @MainActor
-    func weakBinding() throws {
+    func weakBinding() async throws {
         var test: TestClass? = TestClass()
-        let address = PythonBinding(test!).address
-        
-        let _: TestClass = try #require(try? PythonBinding.from(address: address))
+        let binding = try await PythonBinding.make(test!)
+
+        try await binding?.withPythonObject { pythonObject in
+            #expect(pythonObject != Python.None)
+        }
         
         test = nil
+
+        try await Task.sleep(nanoseconds: 100)
         
-        #expect(throws: PythonBindingError.self) {
-            let _: TestClass = try PythonBinding.from(address: address)
+        var isRan = false
+        try await binding?.withPythonObject { pythonObject in
+            isRan = true
         }
+        
+        #expect(isRan == false)
     }
     
     struct RegisterBinding {
@@ -100,11 +106,11 @@ struct PythonBindingTests {
         init() async throws {
             try await TestClass.register()
             testObject = TestClass()
-            binding = PythonBinding(testObject)
+            self.binding = try await PythonBinding.make(testObject)!
         }
         
         @Test func register() async throws {
-            let testAddress = binding.address
+            let testAddress = testObject.address
             
             try await Interpreter.run(
                 "test = TestClass(\(testAddress))"
@@ -120,7 +126,7 @@ struct PythonBindingTests {
         
         @Test func intRegistration() async throws {
             try await Interpreter.perform {
-                let pythonObject = binding.pythonObject
+                let pythonObject = testObject.pythonObject
                 
                 testObject.value = 42
                 #expect(pythonObject.value == 42)
@@ -132,7 +138,7 @@ struct PythonBindingTests {
         
         @Test func stringRegistration() async throws {
             try await Interpreter.perform {
-                let pythonObject = binding.pythonObject
+                let pythonObject = testObject.pythonObject
                 
                 testObject.stringValue = "none"
                 #expect(pythonObject.string_value == "none")
@@ -143,18 +149,15 @@ struct PythonBindingTests {
         }
         
         @Test func floatRegistration() async throws {
-            try await Interpreter.perform {
-                let pythonObject = binding.pythonObject
-                
-                testObject.floatValue = 0.1
+            testObject.floatValue = 0.1
+            
+            try await binding.withPythonObject { pythonObject in
                 #expect(Float(pythonObject.float_value) == 0.1)
             }
         }
         
         @Test func optionalRegistration() async throws {
-            try await Interpreter.perform {
-                let pythonObject = binding.pythonObject
-                
+            try await binding.withPythonObject { pythonObject in
                 testObject.optionalValue = 32
                 
                 #expect(pythonObject.optional_value == 32)
@@ -172,18 +175,16 @@ struct PythonBindingTests {
         
         let testObject = TestClass()
         
-        try await Interpreter.perform {
-            let pythonObject = testObject.pythonObject
-            
+        let binding = try await PythonBinding.make(testObject)
+        
+        try await binding?.withPythonObject { pythonObject in
             #expect(pythonObject.inner_object.value == "hidden")
         }
         
         let newInnerObject = InnerTestClass()
         newInnerObject.value = "revealed"
         
-        try await Interpreter.perform {
-            let pythonObject = testObject.pythonObject
-            
+        try await binding?.withPythonObject { pythonObject in
             pythonObject.inner_object = newInnerObject.pythonObject
             
             #expect(pythonObject.inner_object.value == "revealed")

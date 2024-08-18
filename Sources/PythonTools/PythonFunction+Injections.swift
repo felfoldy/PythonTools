@@ -42,9 +42,8 @@ public extension PythonObject {
         PythonInstanceMethod { (objects: [PythonObject]) in
             PythonRuntimeMonitor.event("extract argument 0: self")
 
-            guard let addrObj = objects.first?.checking._address,
-                  let address = Int(addrObj),
-                  let obj: Object = try? PythonBinding.from(address: address) else {
+            guard let addrObj = objects.first,
+                  let obj = Object.from(addrObj) else {
                 return Python.None
             }
 
@@ -60,9 +59,8 @@ public extension PythonObject {
         PythonInstanceMethod { (objects: [PythonObject]) in
             PythonRuntimeMonitor.event("extract argument 0: self")
 
-            guard let addrObj = objects.first?.checking._address,
-                  let address = Int(addrObj),
-                  var obj: Object = try? PythonBinding.from(address: address) else {
+            guard let addrObj = objects.first,
+                  var obj = Object.from(addrObj) else {
                 return Python.None
             }
 
@@ -78,9 +76,8 @@ public extension PythonObject {
         PythonInstanceMethod { (objects: [PythonObject]) in
             PythonRuntimeMonitor.event("extract argument 0: self")
 
-            guard let addrObj = objects[0].checking._address,
-                  let address = Int(addrObj),
-                  let obj: Object = try? PythonBinding.from(address: address) else {
+            guard let addrObj = objects.first,
+                  let obj = Object.from(addrObj) else {
                 return Python.None
             }
 
@@ -97,9 +94,8 @@ public extension PythonObject {
         PythonInstanceMethod { (objects: [PythonObject]) in
             PythonRuntimeMonitor.event("extract argument 0: self")
 
-            guard let addrObj = objects[0].checking._address,
-                  let address = Int(addrObj),
-                  var obj: Object = try? PythonBinding.from(address: address) else {
+            guard let addrObj = objects.first,
+                  var obj = Object.from(addrObj) else {
                 return Python.None
             }
 

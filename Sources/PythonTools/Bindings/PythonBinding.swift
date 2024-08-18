@@ -9,11 +9,13 @@ import PythonKit
 import Foundation
 import Python
 
-public protocol PythonBindable: AnyObject, PythonConvertible {
+public protocol PythonBindable: ObservableDeinitialization, PythonConvertible {
     static var pythonModule: String { get }
     static var pythonClassName: String { get }
     static func register() async throws
 }
+
+extension PythonBindable {}
 
 public extension PythonBindable {
     static var pythonModule: String { "__main__" }
@@ -21,8 +23,22 @@ public extension PythonBindable {
     var pythonModule: String { Self.pythonModule }
     var pythonClassName: String { Self.pythonClassName }
     
+    var address: Int {
+        let reference = Unmanaged.passUnretained(self).toOpaque()
+        return Int(bitPattern: reference)
+    }
+    
     var pythonObject: PythonObject {
-        PythonBinding(self).pythonObject
+        let address = address
+        // If there is a binding registered return that.
+        if let binding = PythonBinding.registry[address] {
+            return binding.pythonObject ?? Python.None
+        }
+        
+        // Else create a new bindin.
+        let binding = PythonBinding(address: address, self)
+        PythonBinding.registry[address] = binding
+        return binding?.pythonObject ?? Python.None
     }
     
     static func withPythonClass(_ block: @escaping (PythonObject) -> Void) async throws {
@@ -36,15 +52,72 @@ public extension PythonBindable {
     }
 }
 
-private extension PythonBindable {
+public extension PythonBindable {
     static func from(_ pythonObject: PythonObject) -> Self? {
-        guard let address = Int(pythonObject._address) else {
+        guard let _address = pythonObject.checking._address,
+              let address = Int(_address) else {
             return nil
         }
-        
-        return try? PythonBinding.from(address: address)
+
+        return PythonBinding.registry[address]?.object as? Self
     }
 }
+
+public class PythonBinding {
+    /// Swift bindable reference.
+    weak var object: PythonBindable?
+    /// Python reference.
+    var pythonObject: PythonObject?
+
+    init?<Object: PythonBindable>(address: Int, _ object: Object) {
+        self.object = object
+        
+        // Create python object reference.
+        guard let module = try? Python.attemptImport(object.pythonModule),
+              let pythonClass = module.checking[dynamicMember: object.pythonClassName] else {
+            Interpreter.log.fault("Failed to create python object \(object.pythonClassName)")
+            return nil
+        }
+        self.pythonObject = pythonClass(object.address)
+        
+        PythonBinding.registry[address] = self
+        Interpreter.log.trace("\(Object.pythonClassName) binding created")
+        
+        object.onDeinit {
+            Task {
+                try? await Interpreter.perform {
+                    PythonBinding.registry[address]?.pythonObject = nil
+                    PythonBinding.registry[address] = nil
+                    Interpreter.log.trace("\(Object.pythonClassName) binding removed")
+                }
+            }
+        }
+    }
+    
+    @discardableResult
+    public static func make<Object: PythonBindable>(_ object: Object) async throws -> PythonBinding? {
+        if !PythonBinding.registeredClasses.contains(Object.pythonClassName) {
+            try await Object.register()
+        }
+        
+        var binding: PythonBinding?
+        try await Interpreter.perform {
+            binding = PythonBinding(address: object.address, object)
+        }
+        
+        return binding
+    }
+    
+    public func withPythonObject(_ block: @escaping (PythonObject) -> Void) async throws {
+        try await Interpreter.perform { [weak self] in
+            if let pythonObject = self?.pythonObject {
+                block(pythonObject)
+            }
+        }
+    }
+}
+
+// MARK: Register class.
 
 enum SubReferences {
     typealias PropertyReference = [String : PythonBindable]
@@ -52,57 +125,9 @@ enum SubReferences {
     static var map: [Int : PropertyReference] = [:]
 }
 
-public struct PythonBinding {
-    weak var object: PythonBindable?
-
-    public init<Object: PythonBindable>(_ object: Object) {
-        self.object = object
-    }
-    
-    // MARK: Memory address.
-
-    public var address: Int {
-        guard let object else { return 0 }
-        let reference = Unmanaged.passUnretained(object as AnyObject).toOpaque()
-        let address = Int(bitPattern: reference)
-        PythonBinding.registry[address] = self
-        return address
-    }
-
-    public static func from<Object: PythonBindable>(address: Int) throws -> Object {
-        guard let object = registry[address]?.object else {
-            registry[address] = nil
-            SubReferences.map[address] = nil
-            throw PythonBindingError.instanceDeallocated
-        }
-        
-        guard let result = object as? Object else {
-            throw PythonBindingError.instanceDeallocated
-        }
-        return result
-    }
-}
-
-extension PythonBinding: PythonConvertible {
-    public var pythonObject: PythonObject {
-        guard let object else {
-            Interpreter.log.fault("Tried to access deallocated type")
-            return Python.None
-        }
-
-        do {
-            let module = try Python.attemptImport(object.pythonModule)
-            return module[dynamicMember: object.pythonClassName](address)
-        } catch {
-            return Python.None
-        }
-    }
-}
-
-// MARK: Register class.
-
 extension PythonBinding {
     static var registry = [Int : PythonBinding]()
+    static var registeredClasses: Set<String> = []
     
     public static func register<Object>(
         _ object: Object.Type,
@@ -136,6 +161,7 @@ extension PythonBinding {
         }
 
         Interpreter.log.info("Registered binding: \(object.pythonModule).\(object.pythonClassName)")
+        registeredClasses.insert(Object.pythonClassName)
     }
 }
 
@@ -299,7 +325,7 @@ extension PropertyRegistration {
         PropertyRegistration<Root>(
             name: name,
             getter: { root in
-                let address = PythonBinding(root).address
+                let address = root.address
                 
                 guard let references = SubReferences.map[address] else {
                     let newReference = make(root)
