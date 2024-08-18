@@ -69,6 +69,8 @@ public class PythonBinding {
     /// Python reference.
     var pythonObject: PythonObject?
 
+    public var propertyReferences: [String : PythonBindable] = [:]
+
     init?<Object: PythonBindable>(address: Int, _ object: Object) {
         self.object = object
         
@@ -81,14 +83,15 @@ public class PythonBinding {
         self.pythonObject = pythonClass(object.address)
         
         PythonBinding.registry[address] = self
-        Interpreter.log.trace("\(Object.pythonClassName) binding created")
+        
+        Interpreter.log.trace("[\(Object.pythonClassName)] binding created")
         
         object.onDeinit {
             Task {
                 try? await Interpreter.perform {
                     PythonBinding.registry[address]?.pythonObject = nil
                     PythonBinding.registry[address] = nil
-                    Interpreter.log.trace("\(Object.pythonClassName) binding removed")
+                    Interpreter.log.trace("[\(Object.pythonClassName)] binding removed")
                 }
             }
         }
@@ -332,18 +335,12 @@ extension PropertyRegistration {
             getter: { root in
                 let address = root.address
                 
-                guard let references = SubReferences.map[address] else {
-                    let newReference = make(root)
-                    SubReferences.map[address] = [name : newReference]
-                    return newReference
-                }
-
-                if let reference = references[name] {
+                if let reference = PythonBinding.registry[address]?.propertyReferences[name] {
                     return reference
                 }
-
+                
                 let newReference = make(root)
-                SubReferences.map[address]?[name] = newReference
+                PythonBinding.registry[address]?.propertyReferences[name] = newReference
                 return newReference
             },
             setter: nil

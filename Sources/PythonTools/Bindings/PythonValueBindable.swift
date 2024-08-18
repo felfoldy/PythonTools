@@ -20,8 +20,6 @@ open class PythonValueBindable<Value> {
     }
 
     required public init<Base: AnyObject>(base: Base, path: KeyPath<Base, Value>) {
-        Interpreter.log.debug("Value binding created: \(String(describing: path))")
-
         get = { [weak base] in
             base?[keyPath: path]
         }
@@ -38,8 +36,6 @@ open class PythonValueBindable<Value> {
     }
 
     required public init<Base: AnyObject>(base: Base, path: KeyPath<Base, Value?>) {
-        Interpreter.log.debug("Value binding created: \(String(describing: path))")
-        
         get = { [weak base] in
             base?[keyPath: path]
         }
@@ -51,10 +47,6 @@ open class PythonValueBindable<Value> {
         } else {
             set = nil
         }
-    }
-    
-    deinit {
-        Interpreter.log.debug("Value binding deleted")
     }
 }
 
