@@ -9,12 +9,27 @@ import RealityKit
 import PythonTools
 import PythonKit
 
-class TransformComponent: PythonValueBindable<Transform>, PythonBindable {
+class SIMD3Binding: PythonValueBindable<SIMD3<Float>> {
+    static let pythonClassName = "SIMD3Float"
+    
+    static func register() async throws {
+        try await PythonBinding.register(SIMD3Binding.self, members: [
+            .set("x", \.value.x),
+            .set("y", \.value.y),
+            .set("z", \.value.z),
+        ])
+    }
+}
+
+class TransformComponent: PythonValueBindable<Transform> {
     static let pythonClassName = "Transform"
     
     static func register() async throws {
+        try await SIMD3Binding.register()
+        
         try await PythonBinding.register(TransformComponent.self, members: [
-            .set("pos_x", \.value?.translation.x)
+            .set("pos_x", \.value.translation.x),
+            .value("translation", \.value.translation, as: SIMD3Binding.self)
         ])
     }
 }

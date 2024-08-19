@@ -50,4 +50,18 @@ struct EntityChildCollectionTests {
             #expect(pythonObject.transform.pos_x == 3)
         }
     }
+    
+    @MainActor
+    @Test("Value bindable setter")
+    func registerSetter() async throws {
+        let entity = Entity()
+        
+        let binding = try await PythonBinding.make(entity)
+        
+        try await binding.withPythonObject { pythonObject in
+            pythonObject.transform.translation.x = 3
+        }
+        
+        #expect(entity.transform.translation.x == 3)
+    }
 }
