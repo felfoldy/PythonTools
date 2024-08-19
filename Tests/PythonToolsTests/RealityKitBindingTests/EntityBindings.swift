@@ -14,9 +14,9 @@ class SIMD3Binding: PythonValueBindable<SIMD3<Float>> {
     
     static func register() async throws {
         try await PythonBinding.register(SIMD3Binding.self, members: [
-            .set("x", \.value.x),
-            .set("y", \.value.y),
-            .set("z", \.value.z),
+            .set("x", \.x),
+            .set("y", \.y),
+            .set("z", \.z),
         ])
     }
 }
@@ -28,8 +28,8 @@ class TransformComponent: PythonValueBindable<Transform> {
         try await SIMD3Binding.register()
         
         try await PythonBinding.register(TransformComponent.self, members: [
-            .set("pos_x", \.value.translation.x),
-            .value("translation", \.value.translation, as: SIMD3Binding.self)
+            .set("pos_x", \.translation.x),
+            .value("translation", \.translation, as: SIMD3Binding.self)
         ])
     }
 }

@@ -30,7 +30,16 @@ public extension PythonBindable {
         try await setDescription(of: \.self)
     }
     
-    static func setValueDescription<Value>() async throws where Self: PythonValueBindable<Value> {
-        try await setDescription(of: \.value)
+    static func setDescription<Value>() async throws where Self: PythonValueBindable<Value> {
+        try await withPythonClass { pythonClass in
+            pythonClass.__str__ = .instanceFunction { (obj: Self) in
+                let value = obj.get()
+                if let value {
+                    return String(describing: value)
+                } else {
+                    return String(describing: value)
+                }
+            }
+        }
     }
 }
