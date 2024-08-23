@@ -38,20 +38,14 @@ public final class Interpreter {
         try await Interpreter.execute(compiledCode: compiledCode)
     }
     
-    public static func perform(block: @escaping () throws -> Void) async throws {
-        try await shared.perform(block: block)
-    }
-    
     @MainActor
     public static func output(to outputStream: OutputStream) {
         shared.outputStream = outputStream
     }
     
-    public static func completions(code: String) async throws -> [String] {
-        try await load(bundle: .module)
-        
+    public static func completions(code: String) async throws -> [String] {        
         var compeltionsResult = [String]()
-        try await shared.perform {
+        try await perform {
             let interpreter = try Python.attemptImport("interpreter")
             let results = interpreter._completions(code)
                 .compactMap(String.init)
@@ -67,7 +61,7 @@ extension Interpreter {
     public static func performOnMain(block: @MainActor () throws -> Void) throws {
         if !shared.isInitialized {
             shared.isInitialized = true
-            shared.initializePythonEnvironment()
+            try shared.initializePythonEnvironment()
         }
         
         try setThreadState {
@@ -75,16 +69,16 @@ extension Interpreter {
         }
     }
     
-    public func perform(block: @escaping () throws -> Void) async throws {
-        await MainActor.run {
-            if !Interpreter.shared.isInitialized {
-                Interpreter.shared.isInitialized = true
-                Interpreter.shared.initializePythonEnvironment()
+    public static func perform(block: @escaping () throws -> Void) async throws {
+        try await MainActor.run {
+            if !shared.isInitialized {
+                shared.isInitialized = true
+                try shared.initializePythonEnvironment()
             }
         }
         
         try await withCheckedThrowingContinuation { continuation in
-            queue.async {
+            shared.queue.async {
                 do {
                     try Interpreter.setThreadState {
                         try block()
@@ -113,9 +107,19 @@ extension Interpreter {
     }
     
     @MainActor
-    private func initializePythonEnvironment() {
+    private func initializePythonEnvironment() throws {
         PyBundler.shared.pyInit()
         let sys = Python.import("sys")
+        
+        if let identifier = Bundle.module.bundleIdentifier {
+            Interpreter.loadedModules.insert(identifier)
+            
+            guard let path = Bundle.module.path(forResource: "site-packages", ofType: nil) else {
+                throw InterpreterError.failedToLoadBundle
+            }
+            
+            sys.path.append(path)
+        }
 
         // Inject output stream
         sys.stdout.write = .inject { (str: String) in

@@ -18,7 +18,7 @@ public enum PythonRuntimeMonitor {
     
     private static var startTime: DispatchTime?
     
-    static func start() {
+    public static func start() {
         let signpostID = signposter.makeSignpostID()
         state = signposter.beginInterval("Python", id: signpostID)
         currentSignpostID = signpostID
@@ -31,12 +31,14 @@ public enum PythonRuntimeMonitor {
         signposter.emitEvent(message, id: currentSignpostID)
     }
     
-    static func end() {
+    public static func end() {
         guard let state, let startTime else { return }
         signposter.endInterval("Python", state)
 
         let endTime = DispatchTime.now()
         
         executionTime = endTime.uptimeNanoseconds - startTime.uptimeNanoseconds
+        
+        currentSignpostID = nil
     }
 }

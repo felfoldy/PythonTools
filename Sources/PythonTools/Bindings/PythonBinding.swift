@@ -165,9 +165,7 @@ extension PythonBinding {
         _ object: Object.Type,
         subclass: String = "SwiftManagedObject",
         members: [PropertyRegistration<Object>]
-    ) async throws {
-        try await Interpreter.load(bundle: .module)
-        
+    ) async throws {        
         // Register the Python class.
         try await Interpreter.perform {
             // Prevent registering the same class again.
