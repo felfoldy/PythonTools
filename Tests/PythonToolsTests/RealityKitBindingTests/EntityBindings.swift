@@ -34,9 +34,11 @@ class TransformComponent: PythonValueBindable<Transform> {
     }
 }
 
-extension Entity: @retroactive PythonBindable {
+extension Entity: @retroactive PythonConvertible {}
+extension Entity: PythonBindable {
     public static var pythonClassName: String { "Entity" }
     
+    @MainActor
     public static func register() async throws {
         try await TransformComponent.register()
         try await PythonCollection<Entity, Entity.ChildCollection>.register()

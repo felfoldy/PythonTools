@@ -12,14 +12,11 @@ import Python
 
 public final class Interpreter {
     static let shared = Interpreter()
-    
-    @MainActor
+
     public var outputStream: OutputStream = DefaultOutputStream()
 
     private var isInitialized = false
-    
-    @MainActor
-    private var loadedModules = Set<String>()
+
     private let queue = DispatchQueue(label: "PythonQueue",
                                       qos: .userInteractive)
     
@@ -50,29 +47,6 @@ public final class Interpreter {
         shared.outputStream = outputStream
     }
     
-    @MainActor
-    public static func load(bundle: Bundle) async throws {
-        guard let identifier = bundle.bundleIdentifier,
-              !shared.loadedModules.contains(identifier) else {
-            return
-        }
-        
-        shared.loadedModules.insert(identifier)
-
-        bundle.load()
-        
-        guard let path = bundle.path(forResource: "site-packages", ofType: nil)else {
-            throw InterpreterError.failedToLoadBundle
-        }
-        
-        try await perform {
-            let sys = Python.import("sys")
-            sys.path.append(path)
-        }
-        
-        log.info("load \(identifier)")
-    }
-    
     public static func completions(code: String) async throws -> [String] {
         try await load(bundle: .module)
         
@@ -90,18 +64,19 @@ public final class Interpreter {
 
 extension Interpreter {
     public func perform(block: @escaping () throws -> Void) async throws {
+        await MainActor.run {
+            if !Interpreter.shared.isInitialized {
+                Interpreter.shared.isInitialized = true
+                Interpreter.shared.initializePythonEnvironment()
+            }
+        }
+        
         try await withCheckedThrowingContinuation { continuation in
             queue.async {
-                if !Interpreter.shared.isInitialized {
-                    DispatchQueue.main.sync {
-                        Interpreter.shared.initializePythonEnvironment()
-                    }
-                }
-
                 let interpreterState = PyInterpreterState_Head()
                 let tState = PyThreadState_New(interpreterState)
                 PyEval_RestoreThread(tState)
-
+                
                 defer {
                     PyEval_SaveThread()
                     PyThreadState_Clear(tState)
@@ -123,6 +98,8 @@ extension Interpreter {
     private func initializePythonEnvironment() {
         PyBundler.shared.pyInit()
         let sys = Python.import("sys")
+        
+        
 
         // Inject output stream
         sys.stdout.write = .inject { (str: String) in
@@ -148,7 +125,6 @@ extension Interpreter {
         let minor = sys.version_info.minor
         Interpreter.log.info("Initialized Python v\(major).\(minor)")
 
-        isInitialized = true
         PyEval_SaveThread()
     }
 }

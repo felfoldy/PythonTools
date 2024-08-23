@@ -198,9 +198,7 @@ struct PythonBindingTests {
         
         let testObject = TestClass()
         
-        try await Interpreter.perform {
-            let pythonObject = testObject.pythonObject
-            
+        try await PythonBinding.make(testObject).withPythonObject { pythonObject in
             #expect(pythonObject.optional_object.value == "hidden")
             
             testObject.optionalObject = nil

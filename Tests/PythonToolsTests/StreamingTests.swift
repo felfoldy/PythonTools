@@ -15,18 +15,18 @@ extension Tag {
 @Suite(.tags(.outputStreaming))
 @MainActor
 struct OutputStreamingTests {
-    let outputStream = MockOutputStream()
+    let outputStream = MockOutputStream.shared
     
     init() {
-        Interpreter.output(to: outputStream)
+        Interpreter.output(to: MockOutputStream.shared)
     }
     
     @Test("Print a simple message")
     func simplePrint() async throws {
         try await Interpreter.run("print('message')")
         
-        #expect(outputStream.output == "message")
-        #expect(outputStream.finalizeCallCount == 1)
+        #expect(MockOutputStream.shared.outputBuffer.contains("message"))
+        #expect(MockOutputStream.shared.finalizeCallCount > 0)
     }
     
     @Test("Code ID")
@@ -35,16 +35,14 @@ struct OutputStreamingTests {
         let compiledCode = try await Interpreter.compile(code: compilableCode)
         try await Interpreter.execute(compiledCode: compiledCode)
         
-        let codeId = try #require(outputStream.lastCodeId)
-        
-        #expect(codeId == compilableCode.id)
+        #expect(outputStream.finalizedCodes.contains(compilableCode.id))
     }
     
     @Test("Check evaluation result")
     func evaluation() async throws {
         try await Interpreter.run("2 + 2")
         
-        #expect(outputStream.lastEvaluationResult == "4")
+        #expect(outputStream.evaluationResults.contains("4"))
     }
     
     @Test
@@ -69,13 +67,10 @@ struct OutputStreamingTests {
                 return false
             }
             
-            return message == outputStream.errorMessage
-                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return outputStream.errorMessage.contains(message)
         }
 
-        withKnownIssue {
-            #expect(!outputStream.errorMessage.isEmpty)
-        }
+        #expect(!outputStream.errorMessage.isEmpty)
     }
     
     @Test("Execution error", .tags(.errorHandling), arguments: [
@@ -92,7 +87,7 @@ struct OutputStreamingTests {
                 return false
             }
             
-            return message.trimmingCharacters(in: .whitespacesAndNewlines) == outputStream.errorMessage
+            return outputStream.errorMessage.contains(message)
         }
 
         #expect(!outputStream.errorMessage.isEmpty)

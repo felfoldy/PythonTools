@@ -8,23 +8,24 @@
 import PythonTools
 import Foundation
 
-@MainActor
 class MockOutputStream: PythonTools.OutputStream {
+    static var shared = MockOutputStream()
+    
     var outputBuffer: [String] = []
     var errorBuffer: [String] = []
     
     var finalizeCallCount = 0
     var lastExecutionTime: UInt64?
-    var lastCodeId: UUID?
+    var finalizedCodes = Set<UUID>()
     func finalize(codeId: UUID, executionTime: UInt64) {
-        lastCodeId = codeId
+        finalizedCodes.insert(codeId)
         finalizeCallCount += 1
         lastExecutionTime = executionTime
     }
 
-    var lastEvaluationResult: String?
+    var evaluationResults = Set<String>()
     func evaluation(result: String) {
-        lastEvaluationResult = result
+        evaluationResults.insert(result)
     }
     
     var clearCallCount = 0

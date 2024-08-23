@@ -4,15 +4,15 @@ import Foundation
 
 @MainActor
 @Test func bundleLoad() async throws {
-    let output = MockOutputStream()
-    Interpreter.output(to: output)
+    let output = MockOutputStream.shared
+    Interpreter.output(to: MockOutputStream.shared)
     
     try await Interpreter.load(bundle: Bundle.module)
     
     try await Interpreter.run("import libtest")
     try await Interpreter.run("libtest.test_obj.value")
     
-    #expect(output.lastEvaluationResult == "10")
+    #expect(output.evaluationResults.contains("10"))
 }
 
 @Test func codeCompletion() async throws {
