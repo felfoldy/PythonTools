@@ -28,12 +28,12 @@ public protocol ObservableDeinitialization: AnyObject {
 extension ObservableDeinitialization {
     fileprivate var deinitializationObserver: DeinitializationObserver {
         get {
-            return objc_getAssociatedObject(self, &AssociatedKeys.DeinitializationObserver) as! DeinitializationObserver
+            return objc_getAssociatedObject(self, AssociatedKeys.DeinitializationObserver) as! DeinitializationObserver
         }
         set {
             objc_setAssociatedObject(
                 self,
-                &AssociatedKeys.DeinitializationObserver,
+                AssociatedKeys.DeinitializationObserver,
                 newValue,
                 objc_AssociationPolicy.OBJC_ASSOCIATION_RETAIN_NONATOMIC
             )

@@ -10,23 +10,27 @@ import RealityKit
 import PythonTools
 import PythonKit
 
+@Suite(.serialized)
 struct EntityChildCollectionTests {
+    init() async throws {
+        try await Entity.register()
+    }
+    
     @MainActor
-    @Test func childrenExists() async throws {
+    @Test func childrenExists() throws {
         let entity = Entity()
         
-        let binding = try await PythonBinding.make(entity)
-        
-        try await binding.withPythonObject { pythonEntity in
-            let children = try? #require(pythonEntity.checking.children)
-            #expect(children?.isEmpty == true)
+        try entity.withPythonObject { pythonEntity in
+            let children = pythonEntity.children
+            print(children)
+            #expect(children.isEmpty == true)
         }
         
         let child = Entity()
         child.name = "child"
         entity.addChild(child)
         
-        try await binding.withPythonObject { pythonObject in
+        try entity.withPythonObject { pythonObject in
             let pythonChildren = pythonObject.children
             #expect(Python.len(pythonChildren) == 1)
             let child = try? #require(pythonChildren[0])
@@ -38,7 +42,7 @@ struct EntityChildCollectionTests {
     @Test func valueBinding() async throws {
         let entity = Entity()
         
-        let binding = try await PythonBinding.make(entity)
+        let binding = try await entity.binding()
         
         try await binding.withPythonObject { pythonObject in
             #expect(pythonObject.transform.pos_x == 0)
@@ -56,7 +60,7 @@ struct EntityChildCollectionTests {
     func registerSetter() async throws {
         let entity = Entity()
         
-        let binding = try await PythonBinding.make(entity)
+        let binding = try await entity.binding()
         
         try await binding.withPythonObject { pythonObject in
             pythonObject.transform.translation.x = 3

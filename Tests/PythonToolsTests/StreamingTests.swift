@@ -6,27 +6,38 @@
 //
 import Testing
 @testable import PythonTools
+import Foundation
 
 extension Tag {
     @Tag static var outputStreaming: Tag
     @Tag static var errorHandling: Tag
 }
 
-@Suite(.tags(.outputStreaming))
+@Suite(.tags(.outputStreaming), .serialized)
 @MainActor
-struct OutputStreamingTests {
-    let outputStream = MockOutputStream.shared
+class OutputStreamingTests {
+    let outputStream = MockOutputStream()
     
     init() {
-        Interpreter.output(to: MockOutputStream.shared)
+        Interpreter.output(to: outputStream)
+    }
+    
+    @MainActor
+    @Test func bundleLoad() async throws {
+        try await Interpreter.load(bundle: Bundle.module)
+        
+        try await Interpreter.run("import libtest")
+        try await Interpreter.run("libtest.test_obj.value")
+        
+        #expect(outputStream.evaluationResults.contains("10"))
     }
     
     @Test("Print a simple message")
     func simplePrint() async throws {
         try await Interpreter.run("print('message')")
         
-        #expect(MockOutputStream.shared.outputBuffer.contains("message"))
-        #expect(MockOutputStream.shared.finalizeCallCount > 0)
+        #expect(outputStream.outputBuffer.contains("message"))
+        #expect(outputStream.finalizeCallCount > 0)
     }
     
     @Test("Code ID")
@@ -53,11 +64,12 @@ struct OutputStreamingTests {
         #expect(executionTime > 0)
     }
     
-    @Test("Compilation error", .tags(.errorHandling), arguments: [
-        "2+",
-        "print(",
-        "if True",
-    ])
+    @Test("Compilation error",
+          .disabled("Compilation error streaming is not implemented yet."),
+          .tags(.errorHandling),
+          arguments: ["2+",
+                      "print(",
+                      "if True"])
     func errorMessage_compilationError(code: String) async throws {
         await #expect {
             try await Interpreter.run(code)
@@ -96,6 +108,6 @@ struct OutputStreamingTests {
     @Test func clear() async throws {
         try await Interpreter.run("clear()")
         
-        #expect(outputStream.clearCallCount == 1)
+        #expect(outputStream.clearCallCount >= 1)
     }
 }

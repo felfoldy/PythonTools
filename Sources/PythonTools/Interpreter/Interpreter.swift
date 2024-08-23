@@ -63,6 +63,18 @@ public final class Interpreter {
 }
 
 extension Interpreter {
+    @MainActor
+    public static func performOnMain(block: @MainActor () throws -> Void) throws {
+        if !shared.isInitialized {
+            shared.isInitialized = true
+            shared.initializePythonEnvironment()
+        }
+        
+        try setThreadState {
+            try block()
+        }
+    }
+    
     public func perform(block: @escaping () throws -> Void) async throws {
         await MainActor.run {
             if !Interpreter.shared.isInitialized {
@@ -73,19 +85,11 @@ extension Interpreter {
         
         try await withCheckedThrowingContinuation { continuation in
             queue.async {
-                let interpreterState = PyInterpreterState_Head()
-                let tState = PyThreadState_New(interpreterState)
-                PyEval_RestoreThread(tState)
-                
-                defer {
-                    PyEval_SaveThread()
-                    PyThreadState_Clear(tState)
-                    PyThreadState_Delete(tState)
-                }
-                
                 do {
-                    try block()
-                    
+                    try Interpreter.setThreadState {
+                        try block()
+                    }
+
                     continuation.resume()
                 } catch {
                     continuation.resume(throwing: error)
@@ -93,13 +97,25 @@ extension Interpreter {
             }
         }
     }
+
+    static func setThreadState(block: () throws -> Void) throws {
+        let interpreterState = PyInterpreterState_Head()
+        let tState = PyThreadState_New(interpreterState)
+        PyEval_RestoreThread(tState)
+        
+        defer {
+            PyEval_SaveThread()
+            PyThreadState_Clear(tState)
+            PyThreadState_Delete(tState)
+        }
+        
+        try block()
+    }
     
     @MainActor
     private func initializePythonEnvironment() {
         PyBundler.shared.pyInit()
         let sys = Python.import("sys")
-        
-        
 
         // Inject output stream
         sys.stdout.write = .inject { (str: String) in

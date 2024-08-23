@@ -27,18 +27,36 @@ public extension PythonBindable {
         let reference = Unmanaged.passUnretained(self).toOpaque()
         return Int(bitPattern: reference)
     }
-    
+
+    /// Use `withPythonObject` to ensure thread safety.
     var pythonObject: PythonObject {
         let address = address
         // If there is a binding registered return that.
-        if let binding = PythonBinding.registry[address] {
-            return binding.pythonObject ?? Python.None
+        if let binding = PythonBinding.registry[address]?.pythonObject {
+            return binding
         }
         
-        // Else create a new bindin.
-        let binding = PythonBinding(address: address, self)
-        PythonBinding.registry[address] = binding
-        return binding?.pythonObject ?? Python.None
+        // Else create a new binding.
+        if let binding = PythonBinding(address: address, self)?.pythonObject {
+            return binding
+        }
+        return Python.None
+    }
+
+    @MainActor
+    func withPythonObject(_ block: @MainActor (PythonObject) throws -> Void) throws {
+        try Interpreter.performOnMain {
+            let initObject = pythonObject
+            try block(initObject)
+        }
+    }
+    
+    func withPythonObject(_ block: @escaping (PythonObject) throws -> Void) async throws {
+        try await Interpreter.perform { [weak self] in
+            if let pythonObject = self?.pythonObject {
+                try block(pythonObject)
+            }
+        }
     }
     
     static func withPythonClass(_ block: @escaping (PythonObject) -> Void) async throws {
@@ -49,6 +67,25 @@ public extension PythonBindable {
             let object = Python.import(module)[dynamicMember: name]
             block(object)
         }
+    }
+    
+    @discardableResult
+    func binding() async throws -> PythonBinding {
+        try await Self.register()
+        
+        let address = address
+        
+        var binding: PythonBinding?
+        try await Interpreter.perform {
+            binding = PythonBinding(address: address, self)
+        }
+        
+        guard let binding else {
+            // This should never be called
+            throw PythonBindingError.unregisteredType
+        }
+                
+        return binding
     }
 }
 
@@ -97,23 +134,10 @@ public class PythonBinding {
         }
     }
     
+    @available(*, deprecated, renamed: "binding()")
     @discardableResult
     public static func make<Object: PythonBindable>(_ object: Object) async throws -> PythonBinding {
-        if !PythonBinding.registeredClasses.contains(Object.pythonClassName) {
-            try await Object.register()
-        }
-        
-        var binding: PythonBinding?
-        try await Interpreter.perform {
-            binding = PythonBinding(address: object.address, object)
-        }
-        
-        guard let binding else {
-            // This should never be called
-            throw PythonBindingError.unregisteredType
-        }
-                
-        return binding
+        try await object.binding()
     }
     
     public func withPythonObject(_ block: @escaping (PythonObject) -> Void) async throws {
@@ -135,7 +159,7 @@ enum SubReferences {
 
 extension PythonBinding {
     static var registry = [Int : PythonBinding]()
-    static var registeredClasses: Set<String> = []
+    private static var registeredClasses: Set<String> = []
     
     public static func register<Object>(
         _ object: Object.Type,
@@ -146,6 +170,11 @@ extension PythonBinding {
         
         // Register the Python class.
         try await Interpreter.perform {
+            // Prevent registering the same class again.
+            if PythonBinding.registeredClasses.contains(Object.pythonClassName) {
+                return
+            }
+            
             let swiftManaged = Python.import("swiftbinding")[dynamicMember: subclass]
             
             let classDef = PythonClass(
@@ -166,10 +195,10 @@ extension PythonBinding {
                     Python.None
                 )
             }
+            
+            Interpreter.log.info("Registered binding: \(object.pythonModule).\(object.pythonClassName)")
+            registeredClasses.insert(Object.pythonClassName)
         }
-
-        Interpreter.log.info("Registered binding: \(object.pythonModule).\(object.pythonClassName)")
-        registeredClasses.insert(Object.pythonClassName)
     }
 }
 

@@ -8,9 +8,7 @@
 import PythonTools
 import Foundation
 
-class MockOutputStream: PythonTools.OutputStream {
-    static var shared = MockOutputStream()
-    
+class MockOutputStream: PythonTools.OutputStream {    
     var outputBuffer: [String] = []
     var errorBuffer: [String] = []
     
