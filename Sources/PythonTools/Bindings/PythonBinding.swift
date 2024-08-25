@@ -140,8 +140,7 @@ enum SubReferences {
 extension PythonBinding {
     static var registry = [Int : PythonBinding]()
     private static var registeredClasses: Set<String> = []
-    
-    @MainActor
+
     public static func register<Object>(
         _ object: Object.Type,
         subclass: String = "SwiftManagedObject",
@@ -183,14 +182,14 @@ extension PythonBinding {
 
 // MARK: - PropertyRegistration
 
+@MainActor
 public struct PropertyRegistration<Root: PythonBindable> {
     public typealias Registerable = (PythonConvertible & ConvertibleFromPython)
 
     let name: String
-    let getter: @MainActor (Root) -> PythonConvertible
-    let setter: (@MainActor (inout Root, PythonObject) -> Void)?
+    let getter: (Root) -> PythonConvertible
+    let setter: ((inout Root, PythonObject) -> Void)?
 
-    @MainActor
     var getterFunction: PythonObject {
         .instanceFunction { (obj: Root) in
             let result = getter(obj)
@@ -200,7 +199,6 @@ public struct PropertyRegistration<Root: PythonBindable> {
         }
     }
 
-    @MainActor
     var setterFunction: PythonObject {
         guard let setter else { return Python.None }
         
@@ -263,9 +261,9 @@ extension PropertyRegistration {
     public static func bind<Object>(
         name: String,
         get getter: @escaping (Root) -> Object,
-        set setter: (@MainActor (inout Root, Object) -> Void)? = nil
+        set setter: ((inout Root, Object) -> Void)? = nil
     ) -> PropertyRegistration where Object: PythonBindable {
-        let anySetter: (@MainActor (inout Root, PythonObject) -> Void)? = if let setter {
+        let anySetter: ((inout Root, PythonObject) -> Void)? = if let setter {
             { root, pythonValue in
                 if let value = Object.from(pythonValue) {
                     setter(&root, value)
