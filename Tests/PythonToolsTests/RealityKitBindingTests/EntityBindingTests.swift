@@ -33,7 +33,7 @@ struct EntityBindingTests {
         let entity = ModelEntity()
         entity.name = "name"
         
-        try await entity.withPythonObject { pythonEntity in
+        try entity.withPythonObject { pythonEntity in
             #expect(pythonEntity.name == "name")
         }
     }
@@ -44,9 +44,9 @@ struct EntityBindingTests {
         let entity = Entity()
         entity.name = "name"
         
-        try await Entity.register()
+        try Entity.register()
         
-        try await entity.withPythonObject { pythonEntity in
+        try entity.withPythonObject { pythonEntity in
             #expect(pythonEntity.fetch_name() == "name")
         }
     }

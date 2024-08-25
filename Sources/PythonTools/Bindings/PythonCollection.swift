@@ -30,10 +30,11 @@ extension PythonCollection: PythonBindable {
         "\(Base.pythonClassName)_\(String(describing: Value.self))_Collection"
     }
     
-    public static func register() async throws {
-        try await PythonBinding.register(PythonCollection.self, subclass: "SwiftManagedCollection", members: [])
+    @MainActor
+    public static func register() throws {
+        try PythonBinding.register(PythonCollection.self, subclass: "SwiftManagedCollection", members: [])
         
-        try await withPythonClass { pythonClass in
+        try withPythonClass { pythonClass in
             pythonClass.__len__ = .instanceFunction { (collection: Self) in
                 collection.getter()?.count
             }

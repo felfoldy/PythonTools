@@ -36,6 +36,7 @@ public extension PythonObject {
     }
     
     /// `(Object) -> PythonConvertible`
+    @MainActor
     static func instanceFunction<Object: PythonBindable>(
         _ fn: @escaping (Object) -> PythonConvertible
     ) -> PythonObject {
@@ -53,6 +54,7 @@ public extension PythonObject {
     }
     
     /// `(inout Object) -> PythonConvertible`
+    @MainActor
     static func instanceFunction<Object: PythonBindable>(
         _ fn: @escaping (inout Object) -> PythonConvertible
     ) -> PythonObject {
@@ -70,6 +72,7 @@ public extension PythonObject {
     }
     
     /// `(Object, PythonObject) -> PythonConvertible`
+    @MainActor
     static func instanceFunction<Object: PythonBindable>(
         _ fn: @escaping (Object, PythonObject) -> PythonConvertible
     ) -> PythonObject {
@@ -88,6 +91,7 @@ public extension PythonObject {
     }
     
     /// `(inout Object, PythonObject) -> PythonConvertible`
+    @MainActor
     static func instanceFunction<Object: PythonBindable>(
         _ fn: @escaping (inout Object, PythonObject) -> PythonConvertible
     ) -> PythonObject {
@@ -108,6 +112,7 @@ public extension PythonObject {
     // MARK: - Methods
     
     /// `(inout Object, PythonObject) -> Void`
+    @MainActor
     static func instanceMethod<Object: PythonBindable>(
         _ fn: @escaping (inout Object, PythonObject) -> Void
     ) -> PythonObject {

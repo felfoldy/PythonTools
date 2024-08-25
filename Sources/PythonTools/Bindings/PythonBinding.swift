@@ -9,19 +9,15 @@ import PythonKit
 import Foundation
 import Python
 
+@MainActor
 public protocol PythonBindable: ObservableDeinitialization, PythonConvertible {
     static var pythonModule: String { get }
     static var pythonClassName: String { get }
-    static func register() async throws
+    static func register() throws
 }
-
-extension PythonBindable {}
 
 public extension PythonBindable {
     static var pythonModule: String { "__main__" }
-    
-    var pythonModule: String { Self.pythonModule }
-    var pythonClassName: String { Self.pythonClassName }
     
     var address: Int {
         let reference = Unmanaged.passUnretained(self).toOpaque()
@@ -29,18 +25,20 @@ public extension PythonBindable {
     }
 
     /// Use `withPythonObject` to ensure thread safety.
-    var pythonObject: PythonObject {
-        let address = address
-        // If there is a binding registered return that.
-        if let binding = PythonBinding.registry[address]?.pythonObject {
-            return binding
+    nonisolated(unsafe) var pythonObject: PythonObject {
+        MainActor.assumeIsolated {
+            let address = address
+            // If there is a binding registered return that.
+            if let binding = PythonBinding.registry[address]?.pythonObject {
+                return binding
+            }
+            
+            // Else create a new binding.
+            if let binding = PythonBinding(address: address, self)?.pythonObject {
+                return binding
+            }
+            return Python.None
         }
-        
-        // Else create a new binding.
-        if let binding = PythonBinding(address: address, self)?.pythonObject {
-            return binding
-        }
-        return Python.None
     }
 
     @MainActor
@@ -51,32 +49,25 @@ public extension PythonBindable {
         }
     }
     
-    func withPythonObject(_ block: @escaping (PythonObject) throws -> Void) async throws {
-        try await Interpreter.perform { [weak self] in
-            if let pythonObject = self?.pythonObject {
-                try block(pythonObject)
-            }
-        }
-    }
-    
-    static func withPythonClass(_ block: @escaping (PythonObject) -> Void) async throws {
+    @MainActor
+    static func withPythonClass(_ block: @escaping (PythonObject) -> Void) throws {
         let module = pythonModule
         let name = pythonClassName
         
-        try await Interpreter.perform {
+        try Interpreter.performOnMain {
             let object = Python.import(module)[dynamicMember: name]
             block(object)
         }
     }
     
     @discardableResult
-    func binding() async throws -> PythonBinding {
-        try await Self.register()
+    func binding() throws -> PythonBinding {
+        try Self.register()
         
         let address = address
         
         var binding: PythonBinding?
-        try await Interpreter.perform {
+        try Interpreter.performOnMain {
             binding = PythonBinding(address: address, self)
         }
         
@@ -90,6 +81,7 @@ public extension PythonBindable {
 }
 
 public extension PythonBindable {
+    @MainActor
     static func from(_ pythonObject: PythonObject) -> Self? {
         guard let _address = pythonObject.checking._address,
               let address = Int(_address) else {
@@ -100,6 +92,7 @@ public extension PythonBindable {
     }
 }
 
+@MainActor
 public class PythonBinding {
     /// Swift bindable reference.
     weak var object: PythonBindable?
@@ -112,9 +105,10 @@ public class PythonBinding {
         self.object = object
         
         // Create python object reference.
-        guard let module = try? Python.attemptImport(object.pythonModule),
-              let pythonClass = module.checking[dynamicMember: object.pythonClassName] else {
-            Interpreter.log.fault("Failed to create python object \(object.pythonClassName)")
+        
+        guard let module = try? Python.attemptImport(Object.pythonModule),
+              let pythonClass = module.checking[dynamicMember: Object.pythonClassName] else {
+            Interpreter.log.fault("Failed to create python object \(Object.pythonClassName)")
             return nil
         }
         self.pythonObject = pythonClass(object.address)
@@ -133,20 +127,6 @@ public class PythonBinding {
             }
         }
     }
-    
-    @available(*, deprecated, renamed: "binding()")
-    @discardableResult
-    public static func make<Object: PythonBindable>(_ object: Object) async throws -> PythonBinding {
-        try await object.binding()
-    }
-    
-    public func withPythonObject(_ block: @escaping (PythonObject) -> Void) async throws {
-        try await Interpreter.perform { [weak self] in
-            if let pythonObject = self?.pythonObject {
-                block(pythonObject)
-            }
-        }
-    }
 }
 
 // MARK: Register class.
@@ -161,13 +141,14 @@ extension PythonBinding {
     static var registry = [Int : PythonBinding]()
     private static var registeredClasses: Set<String> = []
     
+    @MainActor
     public static func register<Object>(
         _ object: Object.Type,
         subclass: String = "SwiftManagedObject",
         members: [PropertyRegistration<Object>]
-    ) async throws {        
+    ) throws {
         // Register the Python class.
-        try await Interpreter.perform {
+        try Interpreter.performOnMain {
             // Prevent registering the same class again.
             if PythonBinding.registeredClasses.contains(Object.pythonClassName) {
                 return
@@ -206,9 +187,10 @@ public struct PropertyRegistration<Root: PythonBindable> {
     public typealias Registerable = (PythonConvertible & ConvertibleFromPython)
 
     let name: String
-    let getter: (Root) -> PythonConvertible
-    let setter: ((inout Root, PythonObject) -> Void)?
+    let getter: @MainActor (Root) -> PythonConvertible
+    let setter: (@MainActor (inout Root, PythonObject) -> Void)?
 
+    @MainActor
     var getterFunction: PythonObject {
         .instanceFunction { (obj: Root) in
             let result = getter(obj)
@@ -218,6 +200,7 @@ public struct PropertyRegistration<Root: PythonBindable> {
         }
     }
 
+    @MainActor
     var setterFunction: PythonObject {
         guard let setter else { return Python.None }
         
@@ -280,9 +263,9 @@ extension PropertyRegistration {
     public static func bind<Object>(
         name: String,
         get getter: @escaping (Root) -> Object,
-        set setter: ((inout Root, Object) -> Void)? = nil
+        set setter: (@MainActor (inout Root, Object) -> Void)? = nil
     ) -> PropertyRegistration where Object: PythonBindable {
-        let anySetter: ((inout Root, PythonObject) -> Void)? = if let setter {
+        let anySetter: (@MainActor (inout Root, PythonObject) -> Void)? = if let setter {
             { root, pythonValue in
                 if let value = Object.from(pythonValue) {
                     setter(&root, value)
@@ -319,7 +302,7 @@ extension PropertyRegistration {
         get getter: @escaping (Root) -> Value?,
         set setter: ((inout Root, Value?) -> Void)? = nil
     ) -> PropertyRegistration where Value: PythonBindable {
-        let anySetter: ((inout Root, PythonObject) -> Void)? = if let setter {
+        let anySetter: (@MainActor (inout Root, PythonObject) -> Void)? = if let setter {
             { root, pythonValue in
                 let value = Value.from(pythonValue)
                 setter(&root, value)

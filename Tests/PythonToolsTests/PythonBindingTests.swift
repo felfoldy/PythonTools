@@ -28,8 +28,8 @@ extension InnerTestClass: PythonBindable {
         "InnerTestClass"
     }
     
-    static func register() async throws {
-        try await PythonBinding.register(
+    static func register() throws {
+        try PythonBinding.register(
             InnerTestClass.self,
             members: [.set("value", \.value)]
         )
@@ -41,8 +41,8 @@ extension TestClass: PythonBindable {
         "TestClass"
     }
     
-    static func register() async throws {
-        try await PythonBinding.register(
+    static func register() throws {
+        try PythonBinding.register(
             TestClass.self,
             members: [
                 .set("value", \.value),
@@ -65,11 +65,11 @@ struct PythonBindingTests {
         let test = TestClass()
         let address = test.address
         
-        try await test.binding()
+        try test.binding()
 
         try #require(address != 0)
 
-        try await test.withPythonObject { pythonObject in
+        try test.withPythonObject { pythonObject in
             let testClass = TestClass.from(pythonObject)
             
             #expect(testClass === test)
@@ -86,7 +86,7 @@ struct PythonBindingTests {
         }
         
         @Test func register() async throws {
-            let testAddress = testObject.address
+            let testAddress = await testObject.address
             
             try await Interpreter.run(
                 "test = TestClass(\(testAddress))"
@@ -148,16 +148,16 @@ struct PythonBindingTests {
         @MainActor
         func weakBinding() async throws {
             var test: TestClass? = TestClass()
-            let binding = try await test!.binding()
+            let binding = try test!.binding()
 
-            try await binding.withPythonObject { pythonObject in
+            try test?.withPythonObject { pythonObject in
                 #expect(pythonObject != Python.None)
             }
             
             test = nil
             
-            try await binding.withPythonObject { pythonObject in
-                #expect(pythonObject.checking.name == nil)
+            try Interpreter.performOnMain {
+                #expect(binding.pythonObject?.checking.name == nil)
             }
         }
     }

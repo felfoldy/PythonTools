@@ -6,16 +6,16 @@
 //
 
 public extension PythonBindable {
-    static func setDescription<Value>(of path: KeyPath<Self, Value>) async throws {
-        try await withPythonClass { pythonClass in
+    static func setDescription<Value>(of path: KeyPath<Self, Value>) throws {
+        try withPythonClass { pythonClass in
             pythonClass.__str__ = .instanceFunction { (obj: Self) in
                 String(describing: obj[keyPath: path])
             }
         }
     }
-    
-    static func setDescription<Value>(of path: KeyPath<Self, Value?>) async throws {
-        try await withPythonClass { pythonClass in
+
+    static func setDescription<Value>(of path: KeyPath<Self, Value?>) throws {
+        try withPythonClass { pythonClass in
             pythonClass.__str__ = .instanceFunction { (obj: Self) in
                 if let value = obj[keyPath: path] {
                     String(describing: value)
@@ -26,12 +26,13 @@ public extension PythonBindable {
         }
     }
     
-    static func setDescription() async throws {
-        try await setDescription(of: \.self)
+    static func setDescription() throws {
+        try setDescription(of: \.self)
     }
     
-    static func setDescription<Value>() async throws where Self: PythonValueBindable<Value> {
-        try await withPythonClass { pythonClass in
+    @MainActor
+    static func setValueDescription<Value>() throws where Self: PythonValueBindable<Value> {
+        try withPythonClass { pythonClass in
             pythonClass.__str__ = .instanceFunction { (obj: Self) in
                 let value = obj.get()
                 if let value {
