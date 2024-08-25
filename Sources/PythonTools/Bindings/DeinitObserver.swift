@@ -14,12 +14,6 @@ class DeinitializationObserver {
     }
 }
 
-/// We're using objc associated objects to have this `DeinitializationObserver`
-/// stored inside the protocol extension
-private struct AssociatedKeys {
-    static var DeinitializationObserver = "DeinitializationObserver"
-}
-
 public protocol ObservableDeinitialization: AnyObject {
     /// Execute on`deinit`.
     func onDeinit(_ execute: @escaping () -> ())
@@ -28,12 +22,12 @@ public protocol ObservableDeinitialization: AnyObject {
 extension ObservableDeinitialization {
     fileprivate var deinitializationObserver: DeinitializationObserver {
         get {
-            return objc_getAssociatedObject(self, AssociatedKeys.DeinitializationObserver) as! DeinitializationObserver
+            return objc_getAssociatedObject(self, "DeinitializationObserver") as! DeinitializationObserver
         }
         set {
             objc_setAssociatedObject(
                 self,
-                AssociatedKeys.DeinitializationObserver,
+                "DeinitializationObserver",
                 newValue,
                 objc_AssociationPolicy.OBJC_ASSOCIATION_RETAIN_NONATOMIC
             )

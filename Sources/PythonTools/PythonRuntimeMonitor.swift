@@ -9,14 +9,18 @@ import OSLog
 
 private let pointOfInterest = OSLog(subsystem: "com.felfoldy.PythonTools", category: .pointsOfInterest)
 
+
+// TODO: A better monitoring system would be nice.
+
 public enum PythonRuntimeMonitor {
     public static let signposter = OSSignposter(logHandle: pointOfInterest)
-    public static var currentSignpostID: OSSignpostID?
-    public private(set) static var executionTime: UInt64 = 0
+
+    nonisolated(unsafe) public static var currentSignpostID: OSSignpostID?
+    nonisolated(unsafe) public private(set) static var executionTime: UInt64 = 0
     
-    static var state: OSSignpostIntervalState?
+    nonisolated(unsafe) static var state: OSSignpostIntervalState?
     
-    private static var startTime: DispatchTime?
+    nonisolated(unsafe) private static var startTime: DispatchTime?
     
     public static func start() {
         let signpostID = signposter.makeSignpostID()
