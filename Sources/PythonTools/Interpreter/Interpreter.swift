@@ -11,15 +11,19 @@ import PythonKit
 import Python
 
 public final class Interpreter {
+    @MainActor
     static let shared = Interpreter()
 
+    @MainActor
     public var outputStream: OutputStream = DefaultOutputStream()
 
+    @MainActor
     private var isInitialized = false
 
     private let queue = DispatchQueue(label: "PythonQueue",
                                       qos: .userInteractive)
     
+    @MainActor
     init() {
         PythonCReferences.ensureReferences()
     }
@@ -32,8 +36,8 @@ public final class Interpreter {
         let compilableCode = CompilableCode(source: script)
         let path = "<\(URL(string: file)!.lastPathComponent):\(line)>"
         trace(compilableCode.id, "\(path) run initied")
-                
-        let compiledCode = try await Interpreter.compile(code: compilableCode)
+
+        let compiledCode = try await shared.defaultCompiler.compile(code: compilableCode)
 
         try await Interpreter.execute(compiledCode: compiledCode)
     }
@@ -77,8 +81,10 @@ extension Interpreter {
             }
         }
         
+        let queue = await shared.queue
+        
         try await withCheckedThrowingContinuation { continuation in
-            shared.queue.async {
+            queue.async {
                 do {
                     try Interpreter.setThreadState {
                         try block()

@@ -43,7 +43,7 @@ class OutputStreamingTests {
     @Test("Code ID")
     func finalizedCodeID() async throws {
         let compilableCode = CompilableCode(source: "print('message')")
-        let compiledCode = try await Interpreter.compile(code: compilableCode)
+        let compiledCode = try await ByteCodeCompiler.fileCompiler.compile(code: compilableCode)
         try await Interpreter.execute(compiledCode: compiledCode)
         
         #expect(outputStream.finalizedCodes.contains(compilableCode.id))

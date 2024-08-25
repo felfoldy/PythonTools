@@ -18,7 +18,7 @@ struct OutputErrorCompiler: Compiler {
                 PyErr_Print()
             }
 
-            let errorMessage = Interpreter.shared.outputStream.errorMessage
+            let errorMessage = await Interpreter.shared.outputStream.errorMessage
 
             throw InterpreterError.compilationFailure(errorMessage)
         }

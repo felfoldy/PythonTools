@@ -131,12 +131,6 @@ public class PythonBinding {
 
 // MARK: Register class.
 
-enum SubReferences {
-    typealias PropertyReference = [String : PythonBindable]
-    
-    static var map: [Int : PropertyReference] = [:]
-}
-
 extension PythonBinding {
     static var registry = [Int : PythonBinding]()
     private static var registeredClasses: Set<String> = []

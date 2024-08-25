@@ -7,6 +7,7 @@
 
 import Python
 
+@MainActor
 enum PythonCReferences {
     public static var references: [Any] = [
         PyRun_SimpleString,

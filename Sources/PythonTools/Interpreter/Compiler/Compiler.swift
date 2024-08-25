@@ -52,10 +52,3 @@ extension Compiler {
         try await compile(code: CompilableCode(source: code))
     }
 }
-
-extension Interpreter {
-    static func compile(code: CompilableCode, using compiler: Compiler? = nil) async throws -> CompiledByteCode {
-        try await (compiler ?? shared.defaultCompiler)
-            .compile(code: code)
-    }
-}
