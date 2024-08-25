@@ -12,30 +12,37 @@ import PythonKit
 
 @Suite(.serialized)
 struct EntityChildCollectionTests {
-    init() async throws {
-        try await Entity.register()
+    @MainActor
+    init() throws {
+        try Entity.register()
     }
     
-    @MainActor
-    @Test func childrenExists() throws {
-        let entity = Entity()
+    @Test func childrenExists() async throws {
+        let entity = await Entity()
         
-        try entity.withPythonObject { pythonEntity in
+        try await entity.withPythonObject { pythonEntity in
             let children = pythonEntity.children
             print(children)
             #expect(children.isEmpty == true)
         }
         
-        let child = Entity()
-        child.name = "child"
-        entity.addChild(child)
+        let child = await Entity()
         
-        try entity.withPythonObject { pythonObject in
+        await MainActor.run {
+            child.name = "child"
+            entity.addChild(child)
+        }
+
+        try await entity.withPythonObject { pythonObject in
             let pythonChildren = pythonObject.children
             #expect(Python.len(pythonChildren) == 1)
             let child = try? #require(pythonChildren[0])
             #expect(child?.name == "child")
         }
+        
+        let address = await entity.address
+        
+        try await Interpreter.run("Entity(\(address)).children[0]")
     }
     
     @MainActor

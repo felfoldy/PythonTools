@@ -10,13 +10,12 @@ import RealityKit
 import PythonTools
 import PythonKit
 
-@Suite(.serialized)
+@MainActor
 struct EntityBindingTests {
-    init() async throws {
-        try await Entity.register()
+    init() throws {
+        try Entity.register()
     }
-    
-    @MainActor
+
     @Test
     func entityName() throws {
         let entity = Entity()
@@ -27,7 +26,6 @@ struct EntityBindingTests {
         }
     }
 
-    @MainActor
     @Test
     func entitySubclass() throws {
         let entity = ModelEntity()
@@ -38,13 +36,10 @@ struct EntityBindingTests {
         }
     }
 
-    @MainActor
     @Test
     func functionInjection() throws {
         let entity = Entity()
         entity.name = "name"
-        
-        try Entity.register()
         
         try entity.withPythonObject { pythonEntity in
             #expect(pythonEntity.fetch_name() == "name")

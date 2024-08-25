@@ -80,8 +80,9 @@ struct PythonBindingTests {
     struct RegisterBinding {
         let testObject: TestClass
         
-        init() async throws {
-            try await TestClass.register()
+        @MainActor
+        init() throws {
+            try TestClass.register()
             testObject = TestClass()
         }
         

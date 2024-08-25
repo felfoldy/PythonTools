@@ -31,18 +31,24 @@ public extension PythonBindable {
 
     /// Use `withPythonObject` to ensure thread safety.
     nonisolated(unsafe) var pythonObject: PythonObject {
-        MainActor.assumeIsolated {
+        var binding: PythonBinding? {
             let address = address
-            // If there is a binding registered return that.
-            if let binding = PythonBinding.registry[address]?.pythonObject {
+            
+            if let binding = PythonBinding.registry[address] {
                 return binding
             }
             
-            // Else create a new binding.
-            if let binding = PythonBinding(address: address, self)?.pythonObject {
-                return binding
+            return PythonBinding(address: address, self)
+        }
+        
+        if Thread.isMainThread {
+            return MainActor.assumeIsolated {
+                binding?.pythonObject ?? Python.None
             }
-            return Python.None
+        }
+        
+        return DispatchQueue.main.sync {
+            binding?.pythonObject ?? Python.None
         }
     }
 
@@ -190,7 +196,7 @@ public struct PropertyRegistration<Root: PythonBindable> {
     public typealias Registerable = (PythonConvertible & ConvertibleFromPython)
 
     let name: String
-    let getter: (Root) -> PythonConvertible
+    let getter: @MainActor (Root) -> PythonConvertible
     let setter: ((inout Root, PythonObject) -> Void)?
 
     var getterFunction: PythonObject {
@@ -224,7 +230,7 @@ extension PropertyRegistration {
     /// - Returns: `PropertyRegistration`
     public static func bind<Value>(
         name: String,
-        get getter: @escaping (Root) -> Value,
+        get getter: @escaping @MainActor (Root) -> Value,
         set setter: ((inout Root, Value) -> Void)? = nil
     ) -> PropertyRegistration where Value: Registerable {
         let anySetter: ((inout Root, PythonObject) -> Void)? = if let setter {
@@ -300,7 +306,7 @@ extension PropertyRegistration {
     /// - Returns: `PropertyRegistration`
     public static func bind<Value>(
         name: String,
-        get getter: @escaping (Root) -> Value?,
+        get getter: @escaping @MainActor (Root) -> Value?,
         set setter: ((inout Root, Value?) -> Void)? = nil
     ) -> PropertyRegistration where Value: PythonBindable {
         let anySetter: ((inout Root, PythonObject) -> Void)? = if let setter {
@@ -339,7 +345,7 @@ extension PropertyRegistration {
 
     public static func cache<Value>(
         _ name: String,
-        make: @escaping (Root) -> Value
+        make: @escaping @MainActor (Root) -> Value
     ) -> PropertyRegistration where Value: PythonBindable {
         PropertyRegistration<Root>(
             name: name,
