@@ -12,8 +12,8 @@ import PythonKit
 class SIMD3Binding: PythonValueBindable<SIMD3<Float>> {
     static let pythonClassName = "SIMD3Float"
     
-    static func register() async throws {
-        try await PythonBinding.register(SIMD3Binding.self, members: [
+    static func register() throws {
+        try PythonBinding.register(SIMD3Binding.self, members: [
             .set("x", \.x),
             .set("y", \.y),
             .set("z", \.z),
@@ -24,10 +24,10 @@ class SIMD3Binding: PythonValueBindable<SIMD3<Float>> {
 class TransformComponent: PythonValueBindable<Transform> {
     static let pythonClassName = "Transform"
     
-    static func register() async throws {
-        try await SIMD3Binding.register()
+    static func register() throws {
+        try SIMD3Binding.register()
         
-        try await PythonBinding.register(TransformComponent.self, members: [
+        try PythonBinding.register(TransformComponent.self, members: [
             .set("pos_x", \.translation.x),
             .value("translation", \.translation, as: SIMD3Binding.self)
         ])
@@ -39,11 +39,11 @@ extension Entity: PythonBindable {
     public static var pythonClassName: String { "Entity" }
     
     @MainActor
-    public static func register() async throws {
-        try await TransformComponent.register()
-        try await PythonCollection<Entity, Entity.ChildCollection>.register()
+    public static func register() throws {
+        try TransformComponent.register()
+        try PythonCollection<Entity, Entity.ChildCollection>.register()
 
-        try await PythonBinding.register(
+        try PythonBinding.register(
             Entity.self,
             members: [
                 .set("name", \.name),
@@ -52,7 +52,7 @@ extension Entity: PythonBindable {
             ]
         )
         
-        try await withPythonClass { object in
+        try withPythonClass { object in
             object.fetch_name = .instanceFunction { (entity: Entity) in
                 entity.name
             }

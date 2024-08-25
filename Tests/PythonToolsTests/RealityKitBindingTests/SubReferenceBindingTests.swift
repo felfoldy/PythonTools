@@ -42,7 +42,7 @@ struct EntityChildCollectionTests {
     @Test func valueBinding() async throws {
         let entity = Entity()
         
-        let binding = try await entity.binding()
+        let binding = try entity.binding()
         
         try await binding.withPythonObject { pythonObject in
             #expect(pythonObject.transform.pos_x == 0)
@@ -60,7 +60,7 @@ struct EntityChildCollectionTests {
     func registerSetter() async throws {
         let entity = Entity()
         
-        let binding = try await entity.binding()
+        let binding = try entity.binding()
         
         try await binding.withPythonObject { pythonObject in
             pythonObject.transform.translation.x = 3

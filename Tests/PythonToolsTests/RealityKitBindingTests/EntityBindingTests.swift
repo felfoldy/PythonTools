@@ -29,24 +29,24 @@ struct EntityBindingTests {
 
     @MainActor
     @Test
-    func entitySubclass() async throws {
+    func entitySubclass() throws {
         let entity = ModelEntity()
         entity.name = "name"
         
-        try await entity.withPythonObject { pythonEntity in
+        try entity.withPythonObject { pythonEntity in
             #expect(pythonEntity.name == "name")
         }
     }
 
     @MainActor
     @Test
-    func functionInjection() async throws {
+    func functionInjection() throws {
         let entity = Entity()
         entity.name = "name"
         
-        try await Entity.register()
+        try Entity.register()
         
-        try await entity.withPythonObject { pythonEntity in
+        try entity.withPythonObject { pythonEntity in
             #expect(pythonEntity.fetch_name() == "name")
         }
     }

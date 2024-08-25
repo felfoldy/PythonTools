@@ -9,10 +9,11 @@ import PythonKit
 import Foundation
 import Python
 
+@MainActor
 public protocol PythonBindable: ObservableDeinitialization, PythonConvertible {
     static var pythonModule: String { get }
     static var pythonClassName: String { get }
-    static func register() async throws
+    static func register() throws
 }
 
 extension PythonBindable {}
@@ -29,21 +30,22 @@ public extension PythonBindable {
     }
 
     /// Use `withPythonObject` to ensure thread safety.
-    var pythonObject: PythonObject {
-        let address = address
-        // If there is a binding registered return that.
-        if let binding = PythonBinding.registry[address]?.pythonObject {
-            return binding
+    nonisolated(unsafe) var pythonObject: PythonObject {
+        MainActor.assumeIsolated {
+            let address = address
+            // If there is a binding registered return that.
+            if let binding = PythonBinding.registry[address]?.pythonObject {
+                return binding
+            }
+            
+            // Else create a new binding.
+            if let binding = PythonBinding(address: address, self)?.pythonObject {
+                return binding
+            }
+            return Python.None
         }
-        
-        // Else create a new binding.
-        if let binding = PythonBinding(address: address, self)?.pythonObject {
-            return binding
-        }
-        return Python.None
     }
 
-    @MainActor
     func withPythonObject(_ block: @MainActor (PythonObject) throws -> Void) throws {
         try Interpreter.performOnMain {
             let initObject = pythonObject
@@ -51,32 +53,24 @@ public extension PythonBindable {
         }
     }
     
-    func withPythonObject(_ block: @escaping (PythonObject) throws -> Void) async throws {
-        try await Interpreter.perform { [weak self] in
-            if let pythonObject = self?.pythonObject {
-                try block(pythonObject)
-            }
-        }
-    }
-    
-    static func withPythonClass(_ block: @escaping (PythonObject) -> Void) async throws {
+    static func withPythonClass(_ block: (PythonObject) -> Void) throws {
         let module = pythonModule
         let name = pythonClassName
         
-        try await Interpreter.perform {
+        try Interpreter.performOnMain {
             let object = Python.import(module)[dynamicMember: name]
             block(object)
         }
     }
     
     @discardableResult
-    func binding() async throws -> PythonBinding {
-        try await Self.register()
+    func binding() throws -> PythonBinding {
+        try Self.register()
         
         let address = address
         
         var binding: PythonBinding?
-        try await Interpreter.perform {
+        try Interpreter.performOnMain {
             binding = PythonBinding(address: address, self)
         }
         
@@ -100,6 +94,7 @@ public extension PythonBindable {
     }
 }
 
+@MainActor
 public class PythonBinding {
     /// Swift bindable reference.
     weak var object: PythonBindable?
@@ -134,14 +129,8 @@ public class PythonBinding {
         }
     }
     
-    @available(*, deprecated, renamed: "binding()")
-    @discardableResult
-    public static func make<Object: PythonBindable>(_ object: Object) async throws -> PythonBinding {
-        try await object.binding()
-    }
-    
     public func withPythonObject(_ block: @escaping (PythonObject) -> Void) async throws {
-        try await Interpreter.perform { [weak self] in
+        try Interpreter.performOnMain { [weak self] in
             if let pythonObject = self?.pythonObject {
                 block(pythonObject)
             }
@@ -151,12 +140,6 @@ public class PythonBinding {
 
 // MARK: Register class.
 
-enum SubReferences {
-    typealias PropertyReference = [String : PythonBindable]
-    
-    static var map: [Int : PropertyReference] = [:]
-}
-
 extension PythonBinding {
     static var registry = [Int : PythonBinding]()
     private static var registeredClasses: Set<String> = []
@@ -165,9 +148,9 @@ extension PythonBinding {
         _ object: Object.Type,
         subclass: String = "SwiftManagedObject",
         members: [PropertyRegistration<Object>]
-    ) async throws {        
+    ) throws {
         // Register the Python class.
-        try await Interpreter.perform {
+        try Interpreter.performOnMain {
             // Prevent registering the same class again.
             if PythonBinding.registeredClasses.contains(Object.pythonClassName) {
                 return
@@ -202,6 +185,7 @@ extension PythonBinding {
 
 // MARK: - PropertyRegistration
 
+@MainActor
 public struct PropertyRegistration<Root: PythonBindable> {
     public typealias Registerable = (PythonConvertible & ConvertibleFromPython)
 
