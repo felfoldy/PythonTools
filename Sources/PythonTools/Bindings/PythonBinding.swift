@@ -30,26 +30,14 @@ public extension PythonBindable {
     }
 
     /// Use `withPythonObject` to ensure thread safety.
-    nonisolated(unsafe) var pythonObject: PythonObject {
-        var binding: PythonBinding? {
-            let address = address
-            
-            if let binding = PythonBinding.registry[address] {
-                return binding
-            }
-            
-            return PythonBinding(address: address, self)
+    var pythonObject: PythonObject {
+        let address = address
+        
+        if let binding = PythonBinding.registry[address] {
+            return binding.pythonObject ?? Python.None
         }
         
-        if Thread.isMainThread {
-            return MainActor.assumeIsolated {
-                binding?.pythonObject ?? Python.None
-            }
-        }
-        
-        return DispatchQueue.main.sync {
-            binding?.pythonObject ?? Python.None
-        }
+        return PythonBinding(address: address, self)?.pythonObject ?? Python.None
     }
 
     func withPythonObject(_ block: @MainActor (PythonObject) throws -> Void) throws {
